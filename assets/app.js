@@ -622,7 +622,7 @@
 		$('tb-bar').style.width = pct + '%';
 		$('tb-progress').hidden = !s.ffmpeg;
 		if (!s.ffmpeg) {
-			$('tb-text').textContent = "ffmpeg was not found, so video previews can't be made. Install ffmpeg (or set FFMPEG_PATH in config.local.php) and reload.";
+			$('tb-text').textContent = "ffmpeg was not found, so video previews can't be made. Run tools\\get-ffmpeg.ps1 (or start.bat and answer Yes), or set FFMPEG_PATH in config.local.php, then reload.";
 			run.hidden = retry.hidden = true;
 			return;
 		}

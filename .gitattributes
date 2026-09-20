@@ -1,0 +1,5 @@
+# Batch files must have Windows line endings when they reach a user's PC (cmd can mis-run labels/goto in LF-only files),
+# including in GitHub's "Download ZIP". Everything else: let git decide.
+* text=auto
+*.bat text eol=crlf
+*.cmd text eol=crlf

@@ -1,19 +1,28 @@
 <#
-  Downloads a portable PHP for Windows (official build from windows.php.net, checked against the published SHA-256),
-  unpacks it into a folder of your choice and tells start.bat where it is (writes php.path).
+  Downloads a portable PHP for Windows (official build from windows.php.net, checked against the published SHA-256)
+  into the "php" folder NEXT TO THE APP, so the whole app lives in one folder. start.bat finds it there by itself.
 
-    powershell -ExecutionPolicy Bypass -File tools\get-php.ps1 -Dir H:\Tools\php
+    powershell -ExecutionPolicy Bypass -File tools\get-php.ps1
 
-  Keep the folder OUTSIDE this project (the program files do not belong in the repository). Nothing is installed
-  system-wide: no registry entries, no PATH change. Requires the "Visual C++ 2015-2022 Redistributable" (x64) that
-  most PCs already have.
+  The php folder is git-ignored (the program files do not belong in the repository). Nothing is installed
+  system-wide: no registry entries, no PATH change. Delete the folder to uninstall. Requires the
+  "Visual C++ 2015-2022 Redistributable" (x64) that most PCs already have.
+
+  -Dir <folder>   put PHP somewhere else instead (then this script also writes php.path so start.bat can find it)
+  -Series 8.4     another PHP series (default 8.3)
 #>
 param(
-	[Parameter(Mandatory = $true)][string]$Dir,
-	[string]$Series = '8.3'   # any series the site still lists: 8.1, 8.2, 8.3, 8.4 ...
+	[string]$Dir,
+	[string]$Series = '8.3',   # any series the site still lists: 8.1, 8.2, 8.3, 8.4 ...
+	[switch]$Quiet          # used by start.bat: skip the closing hint
 )
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'   # Windows PowerShell 5.1 downloads many times slower with its progress bar on
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+$root = Split-Path $PSScriptRoot -Parent
+$inApp = -not $Dir
+if ($inApp) { $Dir = Join-Path $root 'php' }
 
 $base = 'https://windows.php.net/downloads/releases'
 $rel = (Invoke-RestMethod "$base/releases.json").$Series
@@ -40,6 +49,12 @@ if (Test-Path "$Dir\php.exe") {
 
 $php = Join-Path $Dir 'php.exe'
 & $php -v
-$root = Split-Path $PSScriptRoot -Parent
-Set-Content -Path (Join-Path $root 'php.path') -Value $php -Encoding ascii
-Write-Host "start.bat will use $php (written to php.path)."
+if ($LASTEXITCODE -ne 0) {
+	throw "PHP was unpacked but does not start. Most likely the Microsoft Visual C++ Redistributable (x64) is missing: install it from https://aka.ms/vs/17/release/vc_redist.x64.exe and start again."
+}
+if ($inApp) {
+	if (-not $Quiet) { Write-Host "PHP is in $Dir - just double-click start.bat." }
+} else {
+	Set-Content -Path (Join-Path $root 'php.path') -Value $php -Encoding ascii
+	Write-Host "start.bat will use $php (written to php.path)."
+}

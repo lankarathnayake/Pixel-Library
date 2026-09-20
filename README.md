@@ -48,22 +48,36 @@ catalogued and its path can be copied.)
 ## Requirements
 
 - **Windows** (the folder picker, launcher and player buttons are written for it; the PHP code itself is portable).
-- **PHP 8.1+** with `pdo_sqlite`, `mbstring` and `fileinfo` (and optionally `gd`). Nothing else: no Apache, no MySQL, no XAMPP.
-  `tools\get-php.ps1` downloads a portable PHP for you (see below).
-- Optional: **ffmpeg + ffprobe** for video previews (see "Video previews").
+- **Internet, once**, to fetch PHP (and, if you want video previews, ffmpeg) on the first start. Nothing else to install: no Apache,
+  no MySQL, no XAMPP, no PHP setup.
 
 ## Install and run (standalone - no XAMPP, no database server)
 
-1. Get a portable PHP (official build, checksum-verified, nothing installed system-wide; keep it outside this folder):
-   ```
-   powershell -ExecutionPolicy Bypass -File tools\get-php.ps1 -Dir C:\Tools\php
-   ```
-   It also writes `php.path`, which tells `start.bat` where PHP is. (Already have PHP? Put `php.exe` on your PATH, or
-   write its full path into `php.path`.)
-2. Optional: copy `config.local.example.php` to `config.local.php` for your settings (ffmpeg path, time zone, ...).
-3. Double-click **`start.bat`**. It starts PHP's built-in web server on `http://127.0.0.1:8686/` and opens it in your
-   browser. Leave its window open while you use the app; closing it stops the app.
+1. **Get the app:** `git clone https://github.com/lankarathnayake/Pixel-Library.git`, or use GitHub's **Code -> Download ZIP** and
+   unzip it into a folder you can write to (e.g. `D:\Apps\Pixel-Library` - not `Program Files`).
+2. **Double-click `start.bat`.** That's all. It starts PHP's built-in web server on `http://127.0.0.1:8686/` and opens it in
+   your browser. Leave its window open while you use the app; closing it stops the app.
+   - **The very first time** there is no PHP yet, so `start.bat` downloads a portable one (about 30 MB, official build from
+     windows.php.net, checked against its published SHA-256) into a `php` folder next to the app and carries on. Nothing is
+     installed system-wide (no registry, no PATH change); delete the `php` folder to uninstall. Later starts take a second.
+   - **Video previews** need ffmpeg, a separate program. If `start.bat` cannot find it, it asks whether to download it (about
+     115 MB from gyan.dev, checked against its published checksum) into an `ffmpeg` folder next to the app. Answer **Y** (or wait
+     20 seconds); **N** means "no previews, don't ask again" (delete `ffmpeg\declined.txt` to be asked again). Set
+     `PIXEL_LIBRARY_FFMPEG=yes` to download without asking, or `no` to never offer it. Everything else works without ffmpeg.
+   - Windows may show a "Windows protected your PC" notice for a script downloaded as a ZIP: choose *More info -> Run anyway*.
+     `start.bat` is plain text - open it in Notepad to see everything it does.
+   - No internet on that PC? Download "PHP 8.3, VS16 x64, Non Thread Safe (zip)" from https://windows.php.net/download/ on
+     another machine and unzip it into a folder named `php` next to `start.bat`.
+   - PHP needs the "Visual C++ 2015-2022 Redistributable (x64)", which most PCs already have
+     (https://aka.ms/vs/17/release/vc_redist.x64.exe if it says a DLL is missing).
+   - Already have PHP? Put `php.exe` on your PATH, or write its full path into a file named `php.path`. To keep PHP elsewhere:
+     `powershell -ExecutionPolicy Bypass -File tools\get-php.ps1 -Dir D:\Tools\php` (also writes `php.path`).
+3. Optional: copy `config.local.example.php` to `config.local.php` for your settings (ffmpeg path, time zone, ...).
    (Another port: set `PIXEL_LIBRARY_PORT` first. Don't want the browser to open: set `PIXEL_LIBRARY_NO_BROWSER=1`.)
+
+**Updating:** pull / download the new version over the old one. Your library (`storage\`) and `php\` are not part of the
+download, so they are kept, and a newer database layout is upgraded automatically on the next start. To update PHP itself
+(security fixes), delete the `php` folder and start again: the newest 8.3 is fetched.
 
 The library is one SQLite file, `storage/pixel-library.sqlite`, created on the first start and upgraded automatically
 when a newer version needs new tables. **That file is your library - back it up by copying it** (with the app stopped, or
@@ -93,9 +107,11 @@ original image files. They are cached in `storage/thumbs/` and regenerated if th
 
 ## Video previews
 
-ffmpeg is **not** part of the app - install it separately: either a portable build (unzip it anywhere outside this folder and set
-`FFMPEG_PATH` / `FFPROBE_PATH` in `config.local.php` to the two .exe files - no restart needed) or `winget install Gyan.FFmpeg`
-(then restart `start.bat` so it sees the new PATH).
+ffmpeg is **not** part of the app (it has its own licence, GPL v3 for the build used here, and is large). `start.bat` offers to
+download it on first start, or run `powershell -ExecutionPolicy Bypass -File tools\get-ffmpeg.ps1` yourself: it puts `ffmpeg.exe` and
+`ffprobe.exe` into an `ffmpeg` folder next to the app (git-ignored; delete it to uninstall), and the app finds them there without
+any setting. Already have ffmpeg? Put it on your PATH, or set `FFMPEG_PATH` / `FFPROBE_PATH` in `config.local.php` to the two
+.exe files (these settings win over everything else) - `start.bat` then never asks.
 
 - **What is made:** frames at the *middle of equal slices* of the video, so a 10-frame video is sampled at 5%, 15%,
   25% ... 95% (middles avoid black first/last frames). The count grows with length so short clips aren't
@@ -259,7 +275,7 @@ api/                       JSON endpoints core/     PHP classes (all SQL lives h
 file.php  thumb.php        streaming      db/       schemas (sqlite + mysql) and migrations
 common/                    bootstrap      tests/    backend tests
 start.bat  router.php      standalone launcher + its router
-tools/get-php.ps1          portable PHP downloader
+tools/get-php.ps1          portable PHP downloader    tools/get-ffmpeg.ps1   ffmpeg downloader
 bin/thumbs.php             CLI worker for video previews
 bin/migrate-mysql-to-sqlite.php   one-off copy of a MySQL library into SQLite
 ```

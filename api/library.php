@@ -83,7 +83,7 @@ api_run(function () {
 		case 'thumbs_run':
 			// One short slice of the queue per request, so the page can show progress and be stopped.
 			if (!Ffmpeg::available()) {
-				throw new ApiException('ffmpeg was not found. Install it and put it on the PATH, or set FFMPEG_PATH and FFPROBE_PATH in config.local.php.');
+				throw new ApiException('ffmpeg was not found. Run tools\\get-ffmpeg.ps1 (or start.bat and answer Yes), or set FFMPEG_PATH and FFPROBE_PATH in config.local.php.');
 			}
 			$seconds = max(1, min(25, (int) ($in['seconds'] ?? 10)));
 			if (isset($in['ids'])) { // only these videos (the user's selection)

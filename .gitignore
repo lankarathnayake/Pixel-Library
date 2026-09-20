@@ -1,7 +1,10 @@
 # Personal settings and credentials - never commit
 config.local.php
 
-# Where start.bat finds PHP (a path on this PC)
+# The portable PHP that tools\get-php.ps1 downloads next to the app (program files, not part of the repository)
+/php/
+
+# Only when PHP lives elsewhere: where start.bat finds it (a path on this PC)
 php.path
 
 # EVERYTHING the app stores is personal and stays out of git: the SQLite database (your library) and its side
@@ -32,3 +35,6 @@ Thumbs.db
 .idea/
 .vscode/
 .claude/
+
+# ffmpeg that tools\get-ffmpeg.ps1 downloads next to the app (program files, not part of the repository)
+/ffmpeg/

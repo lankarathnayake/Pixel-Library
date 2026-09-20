@@ -56,8 +56,9 @@ defined('APP_DEBUG') || define('APP_DEBUG', false);
 
 // ---- Video preview thumbnails (needs ffmpeg + ffprobe) ----
 // Either on the PATH, or give the full path, e.g. 'C:\ffmpeg\bin\ffmpeg.exe'.
-defined('FFMPEG_PATH')  || define('FFMPEG_PATH', 'ffmpeg');
-defined('FFPROBE_PATH') || define('FFPROBE_PATH', 'ffprobe');
+// Default: the "ffmpeg" folder next to the app (tools\get-ffmpeg.ps1 / start.bat put it there), else whatever is on the PATH.
+defined('FFMPEG_PATH')  || define('FFMPEG_PATH', is_file(__DIR__ . '/ffmpeg/bin/ffmpeg.exe') ? __DIR__ . '/ffmpeg/bin/ffmpeg.exe' : 'ffmpeg');
+defined('FFPROBE_PATH') || define('FFPROBE_PATH', is_file(__DIR__ . '/ffmpeg/bin/ffprobe.exe') ? __DIR__ . '/ffmpeg/bin/ffprobe.exe' : 'ffprobe');
 // Width in pixels of each preview frame (height follows the video's aspect ratio).
 defined('VIDEO_THUMB_WIDTH') || define('VIDEO_THUMB_WIDTH', 320);
 // How many frames of one video ffmpeg extracts at the same time.

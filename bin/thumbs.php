@@ -32,7 +32,7 @@ foreach (array_slice($argv, 1) as $arg) {
 }
 
 if (!Ffmpeg::available()) {
-	fwrite(STDERR, "ffmpeg/ffprobe not found. Put them on the PATH or set FFMPEG_PATH / FFPROBE_PATH in config.local.php.\n");
+	fwrite(STDERR, "ffmpeg/ffprobe not found. Run tools\\get-ffmpeg.ps1, or put them on the PATH, or set FFMPEG_PATH / FFPROBE_PATH in config.local.php.\n");
 	exit(1);
 }
 if ($retry) {
