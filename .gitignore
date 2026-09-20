@@ -1,0 +1,34 @@
+# Personal settings and credentials - never commit
+config.local.php
+
+# Where start.bat finds PHP (a path on this PC)
+php.path
+
+# EVERYTHING the app stores is personal and stays out of git: the SQLite database (your library) and its side
+# files, thumbnails, actor photos, playlists, logs, and anything else you put in storage/. Only the three
+# empty placeholder files below are kept, so the folders exist in a fresh checkout.
+/storage/*
+!/storage/thumbs/
+/storage/thumbs/*
+!/storage/thumbs/.gitkeep
+!/storage/actors/
+/storage/actors/*
+!/storage/actors/.gitkeep
+!/storage/playlists/
+/storage/playlists/*
+!/storage/playlists/.gitkeep
+
+# Databases, logs, backups, editor/OS noise (anywhere in the project)
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.db
+*.log
+*.bak
+*.orig
+*.swp
+Thumbs.db
+.DS_Store
+.idea/
+.vscode/
+.claude/

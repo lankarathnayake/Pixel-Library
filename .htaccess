@@ -1,0 +1,24 @@
+# Pixel Library - pages and endpoints are plain PHP files; no rewrite needed.
+
+# Never serve config or VCS files.
+<FilesMatch "^(config(\.local)?(\.example)?\.php|\.gitignore|composer\.(json|lock))$">
+	Require all denied
+</FilesMatch>
+
+# Block direct HTTP access to code / migration / cache directories.
+# These are only ever reached via PHP include from a page or endpoint.
+RewriteEngine On
+RewriteRule ^(core|common|db|storage|tests|bin)(/|$) - [F,L]
+
+# Basic hardening headers.
+<IfModule mod_headers.c>
+	Header always set X-Content-Type-Options "nosniff"
+	Header always set X-Frame-Options "SAMEORIGIN"
+	Header always set Referrer-Policy "same-origin"
+</IfModule>
+
+Options -Indexes
+
+<FilesMatch "\.(sql|bak|bk|old|orig|save|swp|swo|log|env|ini|conf|md|yml|yaml|txt|zip|tar|gz|tgz|rar|7z|pem|key|crt|pfx|p12|map|sqlite|db)$">
+	Require all denied
+</FilesMatch>
