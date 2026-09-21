@@ -101,7 +101,7 @@ class Paths {
 					}
 					$dirs[] = ['name' => $name, 'path' => $info->getPathname(), 'is_dir' => true];
 				} else {
-					$kind = MediaTypes::forPath($name);
+					$kind = MediaTypes::forPath($info->getPathname());
 					if ($kind === null) {
 						continue;
 					}

@@ -19,7 +19,7 @@ if (isset($_GET['n'])) {
 }
 
 $row = Library::find($id);
-$kind = $row ? MediaTypes::forPath($row['path']) : null;
+$kind = $row ? MediaTypes::forExisting($row['path'], $row['type']) : null;
 if ($row === null || $kind === null || $kind['type'] !== 'image') {
 	http_response_code(404);
 	exit('Not found.');

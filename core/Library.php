@@ -322,8 +322,10 @@ class Library {
 					$fail('It is no longer at the location it was added from (moved, or a folder was replaced by a link).');
 					continue;
 				}
-				if (!is_file($real) || MediaTypes::forPath($real) === null) {
-					$fail('Not a regular media file.');
+				// Strict on purpose (no "stored type" fallback): only a file whose extension is a known media format may be deleted,
+				// so a tampered entry can never point the deletion at some other kind of file.
+				if (!is_file($real) || MediaTypes::forExisting($real) === null) {
+					$fail(is_file($real) ? 'Its file type is not a known media format (add it on the Settings page to delete it from here).' : 'Not a regular media file.');
 					continue;
 				}
 				if (!Paths::allowed($real)) {

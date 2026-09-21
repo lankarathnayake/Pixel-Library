@@ -50,6 +50,7 @@ require_once __DIR__ . '/common/bootstrap.php';
 	<a class="btn" href="playlists.php">Playlists</a>
 	<a class="btn" href="actors.php">Actors</a>
 	<a class="btn" href="manage.php">Manage tags</a>
+	<a class="btn" href="settings.php">Settings</a>
 </header>
 
 <div class="layout">

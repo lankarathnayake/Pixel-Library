@@ -806,6 +806,105 @@ echo "Unicode case (names compare and search case-insensitively for any letter)\
 	@unlink($u);
 }
 
+echo "MPEG transport stream (.ts) is a video, TypeScript (.ts) is not\n";
+{
+	$dir = "$root/ts";
+	mkdir($dir);
+	file_put_contents("$dir/app.ts", "export const answer: number = 42;\n" . str_repeat("// padding so the file is long enough to look at\n", 30));
+	file_put_contents("$dir/G.ts", 'G');
+	file_put_contents("$dir/lookalike.ts", str_repeat("\x47" . str_repeat("\x00", 187), 4)); // sync byte every 188 bytes
+	check(MediaTypes::forPath("$dir/app.ts") === null, 'a TypeScript source file is not a video');
+	check(MediaTypes::forPath("$dir/G.ts") === null, 'a tiny file that merely starts with "G" is not a video');
+	check((MediaTypes::forPath("$dir/lookalike.ts")['type'] ?? '') === 'video' && MediaTypes::forPath("$dir/lookalike.ts")['mime'] === 'video/mp2t', 'a file with the transport-stream sync bytes is a video (video/mp2t)');
+	check((MediaTypes::forPath("$dir/not-there.ts")['type'] ?? '') === 'video', 'a bare name / missing file is judged by its extension');
+	check(array_column(Paths::listDir($dir)['entries'], 'name') === ['lookalike.ts'], 'the folder picker lists only the real one');
+	$r = Library::add([], [$dir], false);
+	check($r['added'] === 1, 'adding the folder registers only the real one (not the TypeScript files)');
+	$r = Library::add(["$dir/app.ts"], [], false);
+	check($r['added'] === 0 && count($r['skipped']) === 1, 'adding the TypeScript file directly is refused');
+
+	if (Ffmpeg::available()) {
+		$ok = Ffmpeg::run([FFMPEG_PATH, '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=160x120:rate=5:duration=4', '-c:v', 'mpeg2video', '-f', 'mpegts', '-y', "$dir/real.ts"], 60) !== null;
+		check($ok && MediaTypes::forPath("$dir/real.ts") !== null, 'a real .ts made by ffmpeg is recognised');
+		Library::add(["$dir/real.ts"], [], false);
+		$tsId = (int) Db::pdo()->query("SELECT id FROM media WHERE name = 'real.ts'")->fetchColumn();
+		VideoThumbs::run(60, null, [$tsId]);
+		$row = Library::find($tsId);
+		check($tsId > 0 && (int) $row['thumb_status'] === VideoThumbs::DONE && count(VideoThumbs::timesFor([$tsId])[$tsId] ?? []) > 0, 'previews are made for a .ts video');
+	}
+}
+
+echo "File formats (Settings page)\n";
+{
+	$pdo = Db::pdo();
+	MediaTypes::reset();
+	$seed = [];
+	foreach ($pdo->query('SELECT ext, type, mime FROM media_format')->fetchAll() as $r) {
+		$seed[$r['ext']] = [$r['type'], $r['mime']];
+	}
+	$def = MediaTypes::DEFAULTS;
+	ksort($seed);
+	ksort($def);
+	check($seed === $def && count($seed) === 16, 'the formats seeded by the schema are exactly the built-in list (16)');
+
+	$dir = "$root/fmt";
+	mkdir($dir);
+	file_put_contents("$dir/a.mpg", 'mpeg-ish');
+	file_put_contents("$dir/b.xyz", 'unknown');
+	file_put_contents("$dir/c.mp4", 'mp4-ish');
+	check(Library::add([], [$dir], false)['added'] === 1, 'before adding formats: only the .mp4 is picked up');
+
+	check(MediaTypes::add('.MPG', 'video') === ['ext' => 'mpg', 'type' => 'video', 'mime' => 'video/mpeg'], 'adding ".MPG" (dot, capitals) stores "mpg" with its usual MIME type');
+	check(throwsApi(fn() => MediaTypes::add('mpg', 'video'), 409), 'adding it again -> 409');
+	check(Library::add([], [$dir], false)['added'] === 1, 'a rescan now picks up the .mpg (and still not the unknown .xyz)');
+	check(MediaTypes::add('xyz', 'video', 'video/x-xyz')['mime'] === 'video/x-xyz', 'a format nobody has heard of can be added with its own MIME type');
+	check(Library::add([], [$dir], false)['added'] === 1, '...and its files are picked up');
+	check(in_array('mpg', array_column(MediaTypes::all(), 'ext'), true) && array_column(MediaTypes::all(), 'files', 'ext')['mpg'] === 1, 'the list shows how many library files use each format');
+
+	foreach (['', 'a b', 'toolongextension', 'mp-4', '.'] as $bad) {
+		check(throwsApi(fn() => MediaTypes::add($bad, 'video')), 'not an extension, refused: "' . $bad . '"');
+	}
+	foreach (['exe', 'php', '.PHP', 'html', 'ps1', 'js'] as $bad) {
+		check(throwsApi(fn() => MediaTypes::add($bad, 'video')), 'a program / script / web page is never a media format: ' . $bad);
+	}
+	check(throwsApi(fn() => MediaTypes::add('abc', 'audio')), 'an unknown kind is refused');
+	check(throwsApi(fn() => MediaTypes::add('abc', 'video', 'image/png')) && throwsApi(fn() => MediaTypes::add('abc', 'video', 'text/html')), 'a MIME type of the wrong kind, or outside video/ and image/, is refused');
+
+	$idMpg = (int) $pdo->query("SELECT id FROM media WHERE name = 'a.mpg'")->fetchColumn();
+	$idXyz = (int) $pdo->query("SELECT id FROM media WHERE name = 'b.xyz'")->fetchColumn();
+	check(MediaTypes::remove('mpg', false) === 0 && MediaTypes::forPath("$dir/a.mpg") === null, 'removing .mpg: new .mpg files are no longer picked up');
+	check(Library::find($idMpg) !== null, '...but the .mpg already in the library stays');
+	check(MediaTypes::forExisting("$dir/a.mpg", 'video')['mime'] === 'video/mpeg', '...and can still be served (by the suggested list)');
+	check(in_array('mpg', array_column(MediaTypes::suggestions(), 'ext'), true), '...and .mpg is offered as a one-click suggestion again');
+	check(MediaTypes::forExisting("$dir/b.xyz", 'video')['mime'] === 'video/x-xyz', 'a custom format that is still listed serves with its own MIME type');
+	check(MediaTypes::remove('xyz', false) === 0 && MediaTypes::forExisting("$dir/b.xyz", 'video')['type'] === 'video' && MediaTypes::forExisting("$dir/b.xyz", 'video')['mime'] === 'video/mp4', 'a custom format removed later: its files still serve (by the type they were added with)');
+	check(MediaTypes::forExisting("$dir/b.xyz") === null, '...but without a stored type an unknown extension is not a media file');
+	MediaTypes::add('xyz', 'video');
+	check(MediaTypes::remove('xyz', true) === 1 && Library::find($idXyz) === null && is_file("$dir/b.xyz"), 'removing a format with "take the files out of the library": they leave the library, never the disk');
+	check(throwsApi(fn() => MediaTypes::remove('nope', false), 404), 'removing something that is not listed -> 404');
+
+	MediaTypes::remove('avi', false);
+	check(!isset(MediaTypes::active()['avi']) && in_array('avi', array_column(MediaTypes::suggestions(), 'ext'), true), 'a built-in format can be removed (and is then offered again)');
+	MediaTypes::restoreDefaults();
+	check(MediaTypes::active() === MediaTypes::DEFAULTS || (array_keys(MediaTypes::active()) === array_keys(MediaTypes::DEFAULTS) || count(MediaTypes::active()) === 16) && isset(MediaTypes::active()['avi']) && !isset(MediaTypes::active()['xyz']) && !isset(MediaTypes::active()['mpg']), 'reset: back to the 16 built-in formats');
+
+	$pdo->exec("DELETE FROM media_format WHERE ext <> 'mp4'");
+	MediaTypes::reset();
+	check(throwsApi(fn() => MediaTypes::remove('mp4', false)), 'the last format cannot be removed');
+	MediaTypes::restoreDefaults();
+	check(count(MediaTypes::active()) === 16, 'reset restores the list after that');
+
+	// a file whose format was removed can still be deleted through the app's own safety check
+	file_put_contents("$dir/d.mpg", 'to delete');
+	MediaTypes::add('mpg', 'video');
+	Library::add(["$dir/d.mpg"], [], false);
+	$idD = (int) $pdo->query("SELECT id FROM media WHERE name = 'd.mpg'")->fetchColumn();
+	MediaTypes::remove('mpg', false);
+	$del = Library::deleteFiles([$idD]);
+	check($del['deleted'] === 1 && !is_file("$dir/d.mpg"), 'deleting from disk still works for a file whose format was removed');
+	MediaTypes::restoreDefaults();
+}
+
 // ---- cleanup ----
 rrmdir($root);
 rrmdir(PLAYLIST_DIR);

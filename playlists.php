@@ -18,6 +18,7 @@ require_once __DIR__ . '/common/bootstrap.php';
 	<span class="spacer"></span>
 	<a class="btn" href="actors.php">Actors</a>
 	<a class="btn" href="duplicates.php">Find duplicates</a>
+	<a class="btn" href="settings.php">Settings</a>
 	<a class="btn" href="./">&larr; Library</a>
 </header>
 

@@ -24,7 +24,7 @@ class Scanner {
 				$it = new FilesystemIterator($dir, $flags);
 			}
 			foreach ($it as $info) {
-				if (!$info->isFile() || MediaTypes::forPath($info->getFilename()) === null) {
+				if (!$info->isFile() || MediaTypes::forPath($info->getPathname()) === null) {
 					continue;
 				}
 				if (count($out) >= $limit) {

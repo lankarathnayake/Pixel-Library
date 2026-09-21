@@ -16,6 +16,7 @@ require_once __DIR__ . '/common/bootstrap.php';
 	<a class="brand" href="./">Pixel Library</a>
 	<span class="crumb">Actors</span>
 	<span class="spacer"></span>
+	<a class="btn" href="settings.php">Settings</a>
 	<a class="btn" href="./">&larr; Library</a>
 	<a class="btn" href="manage.php">Manage tags</a>
 </header>

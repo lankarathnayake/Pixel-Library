@@ -16,6 +16,7 @@ browse, search and filter it.
 - **Video previews.** ffmpeg pulls 5-10 frames from each video; hovering a video tile scrubs through them
   (left edge = start, right edge = end) with a time label. See "Video previews" below.
 - **Video length filter, Playlists, Rescan folders, Duplicate finder** - see the sections of the same names below.
+- **Settings** (top bar): choose which file formats are registered - add the ones you are missing, remove the ones you do not need.
 - **Actors page** (`actors.php`, "Actors" in the top bar): a page to search, sort, create and delete actors, with a profile for
   each - see "Actors" below.
 - **Categories and terms.** Make any categories you like (starter: *Tags*, *Actors*). Each holds terms
@@ -41,9 +42,11 @@ the category chosen in the bar and both actors in Actors (a `Category:` prefix s
   disk). *Delete from disk* **permanently deletes the file** - see "Deleting files" below. Deleting a category or
   term only removes the label.
 
-Supported types: jpg, jpeg, png, gif, webp, bmp, avif, mp4, m4v, webm, ogv, mov, mkv, avi, wmv.
-(Whether a video *plays* depends on your browser's codecs - e.g. mkv/avi/wmv often won't. The entry is still
-catalogued and its path can be copied.)
+Built-in file types: jpg, jpeg, png, gif, webp, bmp, avif (images) and mp4, m4v, webm, ogv, mov, mkv, avi, wmv, ts (videos).
+**They are not fixed:** the **Settings** page (top bar) lists the formats the app registers, and you can add any extension you
+need (mpg, flv, 3gp, m2ts, heic, ... - common ones are one click away) or remove ones you never want. See "Settings: file formats" below.
+(Whether a video *plays* depends on your browser's codecs - e.g. mkv/avi/wmv/ts often won't. The entry is still
+catalogued, gets previews, and can be played with "Play in PotPlayer / VLC".)
 
 ## Requirements
 
@@ -166,6 +169,25 @@ also lets you use the same page for any other category (Studios, ...).
   files themselves are never touched.
 - Tables added by `db/migrations/003-actor-profiles.mysql.sql` and `004-actor-photo.mysql.sql` (fresh installs already have them).
 
+## Settings: file formats
+
+**Settings** (top bar, `settings.php`) controls which file extensions the app registers, so you are not limited to my list:
+
+- **Videos** and **Images** are listed with the number of library files that use each format.
+- **Add a format:** type the extension without the dot (`mpg`), pick Video or Image, and optionally the MIME type (what the file is
+  served as; the usual one is filled in for known formats, otherwise `video/mp4` / `image/jpeg`). Common formats that are not in your
+  list (mpg, mpeg, flv, 3gp, m2ts, vob, tif, heic, ...) are offered as **one-click** additions.
+- **Remove a format:** new files with that extension are no longer added. If library files use it you choose: **keep them** (they
+  stay and still play / show) or **take them out of the library** (never off the disk).
+- A new format only affects files added from now on; **Rescan all my folders now** picks up files of that kind in folders you added
+  earlier. **Reset to the built-in list** undoes all changes.
+- Safety: programs, scripts and web pages (`exe`, `php`, `html`, `js`, ...) are refused as formats, and the list can never be empty.
+- `.ts` is special: it is also the extension of TypeScript source, so a `.ts` file is only added if its content really is an MPEG
+  transport stream (a 0x47 sync byte every 188 bytes). TypeScript files in the same folder are skipped.
+- Permanent deletion stays strict: only files whose extension is a known media format can be deleted from disk through the app.
+- The list is stored in the `media_format` table (created and filled automatically in SQLite; on MySQL run
+  `db/migrations/006-media-formats.mysql.sql` once). Image thumbnails need GD to decode the format (jpg, png, gif, webp, bmp, avif);
+  other image formats are shown as the original file if your browser can display them.
 ## Video length filter
 
 Sidebar "Video length": Under 5 min, 5-10, 10-20, 20-30, 30-60, 1 hour or more, or **Custom...** (from / to in minutes).

@@ -40,7 +40,7 @@ error_reporting(E_ALL);
 require __DIR__ . '/../common/autoload.php';
 
 // Parents before children (foreign keys).
-const TABLES = ['media', 'media_thumb', 'category', 'term', 'media_term', 'actor_profile', 'field_def', 'actor_field_value',
+const TABLES = ['media_format', 'media', 'media_thumb', 'category', 'term', 'media_term', 'actor_profile', 'field_def', 'actor_field_value',
 	'talent_list', 'talent_list_actor', 'library_folder', 'playlist', 'playlist_item'];
 
 if (!in_array('pdo_mysql', get_loaded_extensions(), true)) {
@@ -79,6 +79,13 @@ $counts = [];
 $dst->beginTransaction();
 try {
 	foreach (TABLES as $table) {
+		if (!$src->query('SHOW TABLES LIKE ' . $src->quote($table))->fetchColumn()) { // e.g. media_format on a database from before the Settings page
+			echo "  note: MySQL has no table $table - SQLite keeps its built-in rows\n";
+			continue;
+		}
+		if ($table === 'media_format') {
+			$dst->exec('DELETE FROM media_format'); // the built-in rows: the real list comes from MySQL
+		}
 		$cols = array_column($dst->query("PRAGMA table_info($table)")->fetchAll(), 'name');
 		$have = $src->query("SHOW COLUMNS FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
 		$use = array_values(array_intersect($cols, $have));
@@ -104,6 +111,9 @@ try {
 
 	// Keep the id counters where MySQL had them, so an id that was deleted is not handed out again.
 	foreach (TABLES as $table) {
+		if (!isset($counts[$table])) {
+			continue; // not in MySQL
+		}
 		if (!$dst->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sqlite_sequence'")->fetchColumn()) {
 			break;
 		}
@@ -134,6 +144,9 @@ try {
 // ---- verify ----
 $bad = 0;
 foreach (TABLES as $table) {
+	if (!isset($counts[$table])) {
+		continue; // not in MySQL
+	}
 	$in = (int) $dst->query("SELECT COUNT(*) FROM $table")->fetchColumn();
 	$out = (int) $src->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
 	if ($in !== $out) {

@@ -6,7 +6,7 @@
 require_once __DIR__ . '/common/bootstrap.php';
 
 $row = Library::find((int) ($_GET['id'] ?? 0));
-$kind = $row ? MediaTypes::forPath($row['path']) : null;
+$kind = $row ? MediaTypes::forExisting($row['path'], $row['type']) : null;
 if ($row === null || $kind === null) {
 	http_response_code(404);
 	exit('Not found.');

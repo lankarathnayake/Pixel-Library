@@ -135,7 +135,20 @@ CREATE TABLE playlist_item (
 CREATE INDEX idx_pi_position ON playlist_item (playlist_id, position);
 CREATE INDEX idx_pi_media ON playlist_item (media_id);
 
+-- Which file extensions the app registers (edited on the Settings page). Must stay identical to MediaTypes::DEFAULTS.
+CREATE TABLE media_format (
+	ext   TEXT PRIMARY KEY,                                    -- lower case, no dot
+	type  TEXT NOT NULL CHECK (type IN ('image', 'video')),
+	mime  TEXT NOT NULL                                        -- what the file is served as
+);
+INSERT INTO media_format (ext, type, mime) VALUES
+	('jpg', 'image', 'image/jpeg'), ('jpeg', 'image', 'image/jpeg'), ('png', 'image', 'image/png'), ('gif', 'image', 'image/gif'),
+	('webp', 'image', 'image/webp'), ('bmp', 'image', 'image/bmp'), ('avif', 'image', 'image/avif'),
+	('mp4', 'video', 'video/mp4'), ('m4v', 'video', 'video/mp4'), ('webm', 'video', 'video/webm'), ('ogv', 'video', 'video/ogg'),
+	('mov', 'video', 'video/quicktime'), ('mkv', 'video', 'video/x-matroska'), ('avi', 'video', 'video/x-msvideo'),
+	('wmv', 'video', 'video/x-ms-wmv'), ('ts', 'video', 'video/mp2t');
+
 -- Starter categories (add, rename or delete freely in the Manage page).
 INSERT INTO category (name) VALUES ('Tags'), ('Actors');
 
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
