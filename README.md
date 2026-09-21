@@ -78,9 +78,18 @@ catalogued, gets previews, and can be played with "Play in PotPlayer / VLC".)
 3. Optional: copy `config.local.example.php` to `config.local.php` for your settings (ffmpeg path, time zone, ...).
    (Another port: set `PIXEL_LIBRARY_PORT` first. Don't want the browser to open: set `PIXEL_LIBRARY_NO_BROWSER=1`.)
 
-**Updating:** pull / download the new version over the old one. Your library (`storage\`) and `php\` are not part of the
-download, so they are kept, and a newer database layout is upgraded automatically on the next start. To update PHP itself
-(security fixes), delete the `php` folder and start again: the newest 8.3 is fetched.
+**Updating**
+- **Cloned with git:** `git pull`.
+- **Downloaded as a ZIP:** double-click **`update.bat`**. It asks first, downloads the latest code from GitHub (about 1 MB) and
+  replaces the app's own files. It **never touches** your library and settings: `storage\` (database, thumbnails, photos, playlists),
+  `php\`, `ffmpeg\`, `config.local.php` and `php.path`. Every file it replaces is first copied to `update-backup\<date>\`, so you can
+  go back. It says "you are up to date" when there is nothing new. (`VERSION` holds the ID of the version you have - GitHub fills it in
+  when you download the ZIP. A ZIP from before `update.bat` existed has none: unzip a fresh download over the folder once, answer
+  "replace", and from then on use `update.bat`.)
+- **By hand:** download the ZIP again and unzip it over the old folder, replacing files. Same effect, because the ZIP does not contain
+  your data.
+- A newer database layout is upgraded automatically on the next start. To update PHP itself (security fixes), delete the `php`
+  folder and start again: the newest 8.3 is fetched.
 
 The library is one SQLite file, `storage/pixel-library.sqlite`, created on the first start and upgraded automatically
 when a newer version needs new tables. **That file is your library - back it up by copying it** (with the app stopped, or
@@ -298,6 +307,7 @@ file.php  thumb.php        streaming      db/       schemas (sqlite + mysql) and
 common/                    bootstrap      tests/    backend tests
 start.bat  router.php      standalone launcher + its router
 tools/get-php.ps1          portable PHP downloader    tools/get-ffmpeg.ps1   ffmpeg downloader
+update.bat                 ZIP installs: update to the latest version (tools/update.ps1)
 bin/thumbs.php             CLI worker for video previews
 bin/migrate-mysql-to-sqlite.php   one-off copy of a MySQL library into SQLite
 ```

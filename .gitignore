@@ -38,3 +38,6 @@ Thumbs.db
 
 # ffmpeg that tools\get-ffmpeg.ps1 downloads next to the app (program files, not part of the repository)
 /ffmpeg/
+
+# Copies of the files a ZIP update replaced (tools\update.ps1), so you can go back
+/update-backup/
