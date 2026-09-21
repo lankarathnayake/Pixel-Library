@@ -93,7 +93,7 @@ function api_run(callable $handler) {
 		$data = $handler();
 		json_out(['success' => true] + (is_array($data) ? $data : []));
 	} catch (ApiException $e) {
-		json_out(['success' => false, 'message' => $e->getMessage()], $e->getCode() ?: 400);
+		json_out(['success' => false, 'message' => $e->getMessage()] + $e->data, $e->getCode() ?: 400);
 	} catch (Throwable $e) {
 		error_log('pixel-library: ' . $e);
 		json_out(['success' => false, 'message' => APP_DEBUG ? $e->getMessage() : 'Server error.'], 500);

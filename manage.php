@@ -26,6 +26,8 @@ require_once __DIR__ . '/common/bootstrap.php';
 		A <strong>category</strong> is a kind of label (Tags, Actors, Studios&hellip;). Each category holds any number of
 		<strong>terms</strong> (the tag &ldquo;beach&rdquo;, the actor &ldquo;Jane Doe&rdquo;). Deleting a term or category only removes the
 		label &mdash; your files are never touched.
+		<br>Put a term in the wrong category, or made two for the same thing? <strong>Tick</strong> terms to <strong>move</strong> them to another category
+		(files, actor profile and photo go with them) or <strong>merge</strong> several into one.
 	</p>
 	<form id="new-cat" class="inline-form">
 		<input type="text" id="new-cat-name" placeholder="New category, e.g. Studios" maxlength="100" required>

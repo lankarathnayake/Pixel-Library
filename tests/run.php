@@ -905,6 +905,113 @@ echo "File formats (Settings page)\n";
 	MediaTypes::restoreDefaults();
 }
 
+echo "Moving terms between categories, merging terms\n";
+{
+	$pdo = Db::pdo();
+	$cA = Taxonomy::addCategory('Mix A');
+	$cB = Taxonomy::addCategory('Mix B');
+	$cC = Taxonomy::addCategory('Mix C');
+	$mk = function (string $n) use ($pdo): int {
+		$p = "/x/mix-$n.png";
+		$pdo->prepare("INSERT INTO media (path, path_hash, name, ext, type, size) VALUES (?, ?, ?, 'png', 'image', 1)")->execute([$p, sha1($p), "mix-$n.png"]);
+		return (int) $pdo->lastInsertId();
+	};
+	[$m1, $m2, $m3, $m4] = [$mk('1'), $mk('2'), $mk('3'), $mk('4')];
+	$links = fn(int $t) => array_map('intval', $pdo->query("SELECT media_id FROM media_term WHERE term_id = $t ORDER BY media_id")->fetchAll(PDO::FETCH_COLUMN));
+	$catOf = fn(int $t) => (int) $pdo->query("SELECT category_id FROM term WHERE id = $t")->fetchColumn();
+	$gone = fn(int $t) => (int) $pdo->query("SELECT COUNT(*) FROM term WHERE id = $t")->fetchColumn() === 0;
+	$orphans = fn(int $t) => (int) $pdo->query("SELECT (SELECT COUNT(*) FROM media_term WHERE term_id = $t) + (SELECT COUNT(*) FROM actor_profile WHERE term_id = $t) + (SELECT COUNT(*) FROM actor_field_value WHERE term_id = $t) + (SELECT COUNT(*) FROM talent_list_actor WHERE term_id = $t)")->fetchColumn();
+	$photoFile = fn(?string $name) => $name !== null && is_file(rtrim(PHOTOS_DIR, '/\\') . '/' . $name);
+	$tmpPng = "$root/mix-photo.png";
+	file_put_contents($tmpPng, $png);
+
+	// ---- move ----
+	$jane = Taxonomy::ensureTerm($cA, 'Jane');
+	Taxonomy::assign([$m1, $m2], [$jane]);
+	Actors::save($jane, ['rating' => 4, 'notes' => 'jane notes']);
+	$r = Taxonomy::moveTerms([$jane], $cB);
+	check($r === ['moved' => 1, 'merged' => 0] && $catOf($jane) === $cB, 'move: the term is now in the other category');
+	check($links($jane) === [$m1, $m2] && Actors::profile($jane)['rating'] === 4 && Actors::profile($jane)['notes'] === 'jane notes', '...with its files and its actor profile');
+	check(Taxonomy::moveTerms([$jane], $cB) === ['moved' => 0, 'merged' => 0], 'moving a term to the category it is already in does nothing');
+	check(throwsApi(fn() => Taxonomy::moveTerms([$jane], 999999), 404) && throwsApi(fn() => Taxonomy::moveTerms([999999], $cA), 404), 'an unknown category / term -> 404');
+
+	$jane2 = Taxonomy::ensureTerm($cA, 'jane'); // same name (any capitals) as the one now in B
+	Taxonomy::assign([$m2, $m3], [$jane2]);
+	try {
+		Taxonomy::moveTerms([$jane2], $cB);
+		check(false, 'a name that already exists in the destination is a conflict (409)');
+	} catch (ApiException $e) {
+		check($e->getCode() === 409 && ($e->data['conflicts'] ?? null) === ['jane'], 'a name that already exists in the destination is a conflict: 409 naming it');
+	}
+	check($catOf($jane2) === $cA, '...and nothing was changed');
+	$r = Taxonomy::moveTerms([$jane2], $cB, true);
+	check($r === ['moved' => 0, 'merged' => 1] && $gone($jane2) && $links($jane) === [$m1, $m2, $m3] && Actors::profile($jane)['rating'] === 4, 'with "merge conflicts": it is merged INTO the existing one (files combined, its profile kept)');
+
+	$a1 = Taxonomy::ensureTerm($cA, 'a1');
+	$a2 = Taxonomy::ensureTerm($cA, 'a2');
+	check(Taxonomy::moveTerms([$a1, $a2, $a1], $cB) === ['moved' => 2, 'merged' => 0] && $catOf($a1) === $cB && $catOf($a2) === $cB, 'several terms move at once (duplicates in the request are ignored)');
+
+	$d1 = Taxonomy::ensureTerm($cA, 'Dup');
+	$d2 = Taxonomy::ensureTerm($cC, 'dup'); // two terms with the same name moving to the same place
+	Taxonomy::assign([$m1], [$d1]);
+	Taxonomy::assign([$m4], [$d2]);
+	check(throwsApi(fn() => Taxonomy::moveTerms([$d1, $d2], $cB), 409), 'two moving terms that share a name are a conflict too');
+	$r = Taxonomy::moveTerms([$d1, $d2], $cB, true);
+	$dupId = (int) $pdo->query("SELECT id FROM term WHERE category_id = $cB AND name = 'Dup'")->fetchColumn();
+	check($r === ['moved' => 1, 'merged' => 1] && $links($dupId) === [$m1, $m4], 'merging conflicts among the moving terms themselves: one term with both files');
+
+	// ---- merge ----
+	$f1 = Actors::addField('Mix field 1', false);
+	$f2 = Actors::addField('Mix field 2', false);
+	$L1 = Actors::addList('Mix list 1');
+	$L2 = Actors::addList('Mix list 2');
+	$t1 = Taxonomy::ensureTerm($cA, 'Jane Doe');
+	$t2 = Taxonomy::ensureTerm($cA, 'J. Doe');
+	Taxonomy::assign([$m1, $m2], [$t1]);
+	Taxonomy::assign([$m2, $m3], [$t2]);
+	Actors::save($t1, ['full_name' => 'Jane Doe', 'rating' => 5, 'notes' => 'n1', 'fields' => [$f1 => 'x'], 'lists' => [$L1]]);
+	Actors::save($t2, ['dob' => '1990-01-01', 'rating' => 2, 'notes' => 'n2', 'fields' => [$f1 => 'z', $f2 => 'y'], 'lists' => [$L1, $L2]]);
+	$p1 = Actors::setPhoto($t1, $tmpPng);
+	$p2 = Actors::setPhoto($t2, $tmpPng);
+	check($photoFile($p1) && $photoFile($p2) && $p1 !== $p2, 'setup: two actors with their own photos');
+
+	$r = Taxonomy::mergeTerms($t1, [$t2]);
+	check($r === ['merged' => 1, 'files_gained' => 1] && $gone($t2), 'merge: the second term is gone, one file (mix-3) gained the label');
+	check($links($t1) === [$m1, $m2, $m3], '...the survivor has the files of both (a file that had both is counted once)');
+	$p = Actors::profile($t1);
+	check($p['name'] === 'Jane Doe' && $p['full_name'] === 'Jane Doe' && $p['rating'] === 5 && $p['dob'] === '1990-01-01', '...profile: the survivor\'s values win, blanks are filled from the other (date of birth)');
+	check($p['notes'] === "n1\n\nn2", '...notes that differ are kept together');
+	check($p['photo'] === $p1 && $photoFile($p1) && !$photoFile($p2), '...the survivor keeps its photo, the other photo file is deleted');
+	$vals = array_column($p['fields'], 'value', 'name');
+	check($vals['Mix field 1'] === 'x' && $vals['Mix field 2'] === 'y', '...custom fields: own value kept, the missing one taken over');
+	check($p['lists'] === [$L1, $L2], '...talent lists: on every list either was on');
+	check($orphans($t2) === 0, '...nothing of the removed term is left behind in any table');
+
+	// the survivor has no profile yet: the other one's becomes its own (photo included)
+	$u1 = Taxonomy::ensureTerm($cA, 'plain');
+	$u2 = Taxonomy::ensureTerm($cA, 'with profile');
+	Actors::save($u2, ['full_name' => 'Has Profile', 'rating' => 3]);
+	$pu = Actors::setPhoto($u2, $tmpPng);
+	Taxonomy::mergeTerms($u1, [$u2]);
+	check(Actors::profile($u1) !== null && Actors::profile($u1)['full_name'] === 'Has Profile' && Actors::profile($u1)['photo'] === $pu && $photoFile($pu), 'merging into a term without a profile: it inherits the profile and the photo');
+
+	// three at once
+	$x1 = Taxonomy::ensureTerm($cA, 'x1');
+	$x2 = Taxonomy::ensureTerm($cA, 'x2');
+	$x3 = Taxonomy::ensureTerm($cA, 'x3');
+	Taxonomy::assign([$m1], [$x1]);
+	Taxonomy::assign([$m1, $m2], [$x2]);
+	Taxonomy::assign([$m3, $m4], [$x3]);
+	$r = Taxonomy::mergeTerms($x1, [$x2, $x3, $x2, $x1]);
+	check($r === ['merged' => 2, 'files_gained' => 3] && $links($x1) === [$m1, $m2, $m3, $m4] && $gone($x2) && $gone($x3), 'three terms merge at once (repeats and the target itself in the list are ignored)');
+
+	// refusals
+	$other = Taxonomy::ensureTerm($cC, 'elsewhere');
+	check(throwsApi(fn() => Taxonomy::mergeTerms($x1, [$other])), 'terms of different categories cannot be merged (move them first)');
+	check(throwsApi(fn() => Taxonomy::mergeTerms($x1, [$x1])) && throwsApi(fn() => Taxonomy::mergeTerms($x1, [])), 'merging a term with nothing else is refused');
+	check(throwsApi(fn() => Taxonomy::mergeTerms(999999, [$x1]), 404) && throwsApi(fn() => Taxonomy::mergeTerms($x1, [999999]), 404), 'an unknown term -> 404');
+	check($catOf($x1) === $cA && $links($x1) === [$m1, $m2, $m3, $m4], 'a refused merge changed nothing');
+}
 // ---- cleanup ----
 rrmdir($root);
 rrmdir(PLAYLIST_DIR);

@@ -366,8 +366,81 @@ class Actors {
 		}
 	}
 
-	// ---------------------------------------------------------------- photo
+	/**
+	 * Folds everything that hangs off term $sourceId into term $targetId (used when two terms are merged): profile details
+	 * (the target's values win; blanks are filled from the source, and notes that differ are kept together), custom field
+	 * values the target does not have, and talent-list memberships. Nothing is lost except values the target already has.
+	 * Runs inside the caller's transaction; the source's rows are gone afterwards.
+	 * @return string|null a photo file that is no longer used - delete it (deletePhotoFile) once the transaction has committed
+	 */
+	public static function mergeInto(int $targetId, int $sourceId): ?string {
+		$pdo = Db::pdo();
+		$blank = fn($v) => $v === null || trim((string) $v) === '';
+		$unusedPhoto = null;
 
+		$get = $pdo->prepare('SELECT full_name, dob, rating, notes, photo FROM actor_profile WHERE term_id = ?');
+		$get->execute([$sourceId]);
+		$src = $get->fetch();
+		$get->closeCursor();
+		$get->execute([$targetId]);
+		$dst = $get->fetch();
+		$get->closeCursor();
+		if ($src !== false) {
+			if ($dst === false) { // the target had no profile: the source's simply becomes the target's
+				$pdo->prepare('UPDATE actor_profile SET term_id = ? WHERE term_id = ?')->execute([$targetId, $sourceId]);
+			} else {
+				$set = [];
+				foreach (['full_name', 'dob', 'rating', 'photo'] as $col) {
+					if ($blank($dst[$col]) && !$blank($src[$col])) {
+						$set[$col] = $src[$col];
+					}
+				}
+				if (!$blank($src['notes'])) {
+					if ($blank($dst['notes'])) {
+						$set['notes'] = $src['notes'];
+					} elseif (trim($src['notes']) !== trim($dst['notes'])) {
+						$set['notes'] = rtrim($dst['notes']) . "\n\n" . trim($src['notes']);
+					}
+				}
+				if ($set) {
+					self::writeProfile($targetId, $set);
+				}
+				$pdo->prepare('DELETE FROM actor_profile WHERE term_id = ?')->execute([$sourceId]);
+				if (!$blank($src['photo']) && !isset($set['photo'])) {
+					$unusedPhoto = (string) $src['photo'];
+				}
+			}
+		}
+
+		// custom fields: the target keeps its own values, gains the ones it lacked
+		$have = $pdo->prepare('SELECT field_id FROM actor_field_value WHERE term_id = ?');
+		$have->execute([$targetId]);
+		$targetFields = array_flip(array_map('intval', $have->fetchAll(PDO::FETCH_COLUMN)));
+		$vals = $pdo->prepare('SELECT field_id FROM actor_field_value WHERE term_id = ?');
+		$vals->execute([$sourceId]);
+		foreach (array_map('intval', $vals->fetchAll(PDO::FETCH_COLUMN)) as $fieldId) {
+			if (!isset($targetFields[$fieldId])) {
+				$pdo->prepare('UPDATE actor_field_value SET term_id = ? WHERE term_id = ? AND field_id = ?')->execute([$targetId, $sourceId, $fieldId]);
+			}
+		}
+		$pdo->prepare('DELETE FROM actor_field_value WHERE term_id = ?')->execute([$sourceId]);
+
+		// talent lists: the target joins every list the source was on
+		$lists = $pdo->prepare('SELECT list_id FROM talent_list_actor WHERE term_id = ?');
+		$lists->execute([$targetId]);
+		$targetLists = array_flip(array_map('intval', $lists->fetchAll(PDO::FETCH_COLUMN)));
+		$lists->execute([$sourceId]);
+		foreach (array_map('intval', $lists->fetchAll(PDO::FETCH_COLUMN)) as $listId) {
+			if (!isset($targetLists[$listId])) {
+				$pdo->prepare('INSERT INTO talent_list_actor (list_id, term_id) VALUES (?, ?)')->execute([$listId, $targetId]);
+			}
+		}
+		$pdo->prepare('DELETE FROM talent_list_actor WHERE term_id = ?')->execute([$sourceId]);
+
+		return $unusedPhoto;
+	}
+
+	// ---------------------------------------------------------------- photo
 	private const PHOTO_TYPES = [IMAGETYPE_JPEG => 'jpg', IMAGETYPE_PNG => 'png', IMAGETYPE_GIF => 'gif', IMAGETYPE_WEBP => 'webp'];
 	private const PHOTO_MIME = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp'];
 	public const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
@@ -432,7 +505,7 @@ class Actors {
 		return is_file($path) ? ['path' => $path, 'mime' => self::PHOTO_MIME[$m[1]]] : null;
 	}
 
-	private static function deletePhotoFile(string $name): void {
+	public static function deletePhotoFile(string $name): void {
 		if (preg_match('/^[a-f0-9]{12}\.(jpg|png|gif|webp)$/', $name)) { // never delete anything else
 			@unlink(rtrim(PHOTOS_DIR, '/\\') . '/' . $name);
 		}

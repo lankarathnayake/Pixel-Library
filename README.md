@@ -20,7 +20,8 @@ browse, search and filter it.
 - **Actors page** (`actors.php`, "Actors" in the top bar): a page to search, sort, create and delete actors, with a profile for
   each - see "Actors" below.
 - **Categories and terms.** Make any categories you like (starter: *Tags*, *Actors*). Each holds terms
-  ("beach", "Jane Doe"). New terms are created on the fly when you type them.
+  ("beach", "Jane Doe"). New terms are created on the fly when you type them. On **Manage tags** you can also **move** terms to
+  another category and **merge** several into one - see "Moving and merging terms" below.
 - **Faceted filtering** in the sidebar: several terms in the same category = OR, across categories = AND.
   Plus *Untagged only* (great for working through a fresh import) and *Missing files only*.
 - **Viewer** with previous/next (buttons or arrow keys), video playback with seeking, per-file tag editing
@@ -178,6 +179,20 @@ also lets you use the same page for any other category (Studios, ...).
   files themselves are never touched.
 - Tables added by `db/migrations/003-actor-profiles.mysql.sql` and `004-actor-photo.mysql.sql` (fresh installs already have them).
 
+## Moving and merging terms (Manage tags)
+
+Put a tag in the wrong category, or ended up with two terms for the same thing ("Jane" and "Jane Doe")? On **Manage tags**,
+**tick** terms (the box on each one, or click its name) in a category. A toolbar appears:
+
+- **Move to...** another category, then **Move**. The term keeps its files, and for an actor its profile, photo, custom fields and talent
+  lists. If the destination already has a term with that name you are asked whether to **merge** into it instead (nothing changes
+  unless you agree). Filters that mix categories treat the term as part of its new category afterwards (OR within a category, AND across).
+- **Merge...** (needs two or more ticked, in the same category): a dialog asks **which name stays** (the one with the most files is
+  pre-selected) and explains what happens. The others are removed after every file that had them gets the surviving term.
+  For actors the profiles are combined: the survivor's values win, blanks are filled from the others, notes that differ are kept
+  together, custom fields and list memberships it lacked are taken over, and an unused photo file is deleted. To merge terms that
+  are in different categories, move them into one category first.
+- Your files are never touched, and nothing is added to or removed from the library by either action.
 ## Settings: file formats
 
 **Settings** (top bar, `settings.php`) controls which file extensions the app registers, so you are not limited to my list:

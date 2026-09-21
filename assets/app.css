@@ -483,3 +483,20 @@ body.busy #busybar { opacity: 1; }
 @media (max-width: 760px) { .set-cols { grid-template-columns: 1fr; } }
 .fmt-row.asking .fmt-actions { grid-column: 1 / -1; grid-row: 3; justify-content: flex-start; padding-top: 4px; }
 .set-form label { white-space: nowrap; }
+
+/* ---- manage page: tick terms, move / merge ---- */
+.term .t-check { margin: 0 2px 0 -4px; accent-color: var(--accent); cursor: pointer; }
+.term .t-name { cursor: pointer; }
+.term.sel { border-color: var(--accent); background: rgba(91, 140, 255, .12); }
+.term-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--accent); border-radius: var(--radius); }
+.term-bar .sep { width: 1px; align-self: stretch; background: var(--border); margin: 0 2px; }
+.term-bar select { padding: 4px 9px; font-size: 13px; }
+.term-tip { margin: 10px 0 0; }
+.merge-dialog { width: min(560px, 100%); }
+.merge-options { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 12px; max-height: 40vh; overflow-y: auto; }
+.merge-opt { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.merge-opt:hover { border-color: #444a56; }
+.merge-opt input { accent-color: var(--accent); }
+.merge-name { flex: 1; font-weight: 600; }
+.merge-summary { margin: 0 0 12px; }
+.dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }

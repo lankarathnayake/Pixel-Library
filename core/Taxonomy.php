@@ -143,6 +143,153 @@ class Taxonomy {
 		}
 	}
 
+	// ---- moving and merging terms ----
+
+	/** @return array{id:int, category_id:int, name:string} */
+	private static function termRow(int $id): array {
+		$stmt = Db::pdo()->prepare('SELECT id, category_id, name FROM term WHERE id = ?');
+		$stmt->execute([$id]);
+		$row = $stmt->fetch();
+		if ($row === false) {
+			throw new ApiException('That term no longer exists.', 404);
+		}
+		return ['id' => (int) $row['id'], 'category_id' => (int) $row['category_id'], 'name' => $row['name']];
+	}
+
+	/**
+	 * Moves terms to another category. Their files, and for actors the profile / photo / lists, go with them.
+	 * If the destination already has a term with the same name that is a conflict: without $mergeConflicts nothing is
+	 * changed and a 409 lists the names; with it each conflicting term is merged INTO the existing one instead.
+	 * @param int[] $termIds
+	 * @return array{moved:int, merged:int}
+	 */
+	public static function moveTerms(array $termIds, int $categoryId, bool $mergeConflicts = false): array {
+		$pdo = Db::pdo();
+		$exists = $pdo->prepare('SELECT name FROM category WHERE id = ?');
+		$exists->execute([$categoryId]);
+		if ($exists->fetchColumn() === false) {
+			throw new ApiException('That category no longer exists.', 404);
+		}
+		$todo = [];
+		foreach (array_values(array_unique(array_filter(array_map('intval', $termIds), fn($i) => $i > 0))) as $id) {
+			$row = self::termRow($id);
+			if ($row['category_id'] !== $categoryId) {
+				$todo[] = $row;
+			}
+		}
+		if (!$todo) {
+			return ['moved' => 0, 'merged' => 0];
+		}
+
+		$findInDest = $pdo->prepare('SELECT id FROM term WHERE category_id = ? AND name = ?');
+		$conflicts = [];
+		$seen = [];
+		foreach ($todo as $row) { // a name that is already there, or that two of the moving terms share
+			$findInDest->execute([$categoryId, $row['name']]);
+			$key = mb_strtolower($row['name'], 'UTF-8');
+			if ($findInDest->fetchColumn() !== false || isset($seen[$key])) {
+				$conflicts[] = $row['name'];
+			}
+			$findInDest->closeCursor();
+			$seen[$key] = true;
+		}
+		if ($conflicts && !$mergeConflicts) {
+			throw new ApiException('Already in that category: ' . implode(', ', array_map(fn($n) => '"' . $n . '"', $conflicts)) . '.', 409, ['conflicts' => $conflicts]);
+		}
+
+		$moved = 0;
+		$merged = 0;
+		$photos = [];
+		$pdo->beginTransaction();
+		try {
+			$move = $pdo->prepare('UPDATE term SET category_id = ? WHERE id = ?');
+			foreach ($todo as $row) {
+				$findInDest->execute([$categoryId, $row['name']]);
+				$existing = $findInDest->fetchColumn();
+				$findInDest->closeCursor();
+				if ($existing !== false) {
+					self::absorb((int) $existing, $row['id'], $photos);
+					$merged++;
+				} else {
+					$move->execute([$categoryId, $row['id']]);
+					$moved++;
+				}
+			}
+			$pdo->commit();
+		} catch (Throwable $e) {
+			$pdo->rollBack();
+			throw $e;
+		}
+		foreach ($photos as $photo) {
+			Actors::deletePhotoFile($photo);
+		}
+		return ['moved' => $moved, 'merged' => $merged];
+	}
+
+	/**
+	 * Merges terms of ONE category into $targetId: the target keeps its name and identity and gains every file (and, for
+	 * actors, the profile details, custom fields and list memberships) of the others, which are then removed. Files are untouched.
+	 * @param int[] $sourceIds
+	 * @return array{merged:int, files_gained:int}
+	 */
+	public static function mergeTerms(int $targetId, array $sourceIds): array {
+		$target = self::termRow($targetId);
+		$sources = array_values(array_unique(array_filter(array_map('intval', $sourceIds), fn($i) => $i > 0 && $i !== $targetId)));
+		if (!$sources) {
+			throw new ApiException('Pick at least one other term to merge into it.');
+		}
+		foreach ($sources as $id) {
+			if (self::termRow($id)['category_id'] !== $target['category_id']) {
+				throw new ApiException('Only terms of the same category can be merged. Move them into one category first.');
+			}
+		}
+		$pdo = Db::pdo();
+		$photos = [];
+		$gained = 0;
+		$pdo->beginTransaction();
+		try {
+			foreach ($sources as $id) {
+				$gained += self::absorb($targetId, $id, $photos);
+			}
+			$pdo->commit();
+		} catch (Throwable $e) {
+			$pdo->rollBack();
+			throw $e;
+		}
+		foreach ($photos as $photo) {
+			Actors::deletePhotoFile($photo);
+		}
+		return ['merged' => count($sources), 'files_gained' => $gained];
+	}
+
+	/**
+	 * Folds term $sourceId into $targetId and deletes it (inside the caller's transaction). Photo files that became unused
+	 * are added to $photos, to be deleted after the commit.
+	 * @return int how many files gained the target term
+	 */
+	private static function absorb(int $targetId, int $sourceId, array &$photos): int {
+		$pdo = Db::pdo();
+		$have = $pdo->prepare('SELECT media_id FROM media_term WHERE term_id = ?');
+		$have->execute([$targetId]);
+		$already = array_flip(array_map('intval', $have->fetchAll(PDO::FETCH_COLUMN)));
+		$src = $pdo->prepare('SELECT media_id FROM media_term WHERE term_id = ?');
+		$src->execute([$sourceId]);
+		$ins = $pdo->prepare('INSERT INTO media_term (media_id, term_id) VALUES (?, ?)');
+		$gained = 0;
+		foreach (array_map('intval', $src->fetchAll(PDO::FETCH_COLUMN)) as $mediaId) {
+			if (!isset($already[$mediaId])) {
+				$ins->execute([$mediaId, $targetId]);
+				$gained++;
+			}
+		}
+		$pdo->prepare('DELETE FROM media_term WHERE term_id = ?')->execute([$sourceId]);
+		$photo = Actors::mergeInto($targetId, $sourceId);
+		if ($photo !== null) {
+			$photos[] = $photo;
+		}
+		$pdo->prepare('DELETE FROM term WHERE id = ?')->execute([$sourceId]);
+		return $gained;
+	}
 	// ---- media <-> term links ----
 
 	/** Apply these terms to these media (already-linked pairs are left alone). */

@@ -34,7 +34,11 @@
 			} catch (e) {
 				throw new Error(res ? 'Unexpected server response (' + res.status + ').' : 'Could not reach the server.');
 			}
-			if (!data.success) throw new Error(data.message || 'Request failed.');
+			if (!data.success) {
+				const err = new Error(data.message || 'Request failed.');
+				err.data = data; // extra details the server sent with the error (e.g. which names conflict)
+				throw err;
+			}
 			return data;
 		} finally {
 			busyEnd();
