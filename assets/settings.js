@@ -1,4 +1,4 @@
-/* Settings page: which file formats the app registers. */
+/* Settings page: video player master controls (kept in this browser) and which file formats the app registers. */
 (function () {
 	'use strict';
 
@@ -121,7 +121,39 @@
 		});
 	}
 
+	// ---------------------------------------------------------------- video player (kept in this browser)
+
+	function showPlayer() {
+		const s = BA.player.get();
+		$('p-volume').value = Math.round(s.volume * 100);
+		$('p-volume-out').textContent = Math.round(s.volume * 100) + '%';
+		$('p-speed').value = String(s.speed);
+		if ($('p-speed').value !== String(s.speed)) { // a speed set inside the player that is not in the list
+			$('p-speed').append(el('option', { value: String(s.speed) }, s.speed + 'x'));
+			$('p-speed').value = String(s.speed);
+		}
+		$('p-muted').checked = s.muted;
+		$('p-autoplay').checked = s.autoplay;
+		$('p-autonext').checked = s.autoNext;
+		$('p-remember').checked = s.remember;
+	}
+
+	function initPlayer() {
+		showPlayer();
+		const saved = () => toast('Player settings saved. They apply the next time a video opens.');
+		$('p-volume').addEventListener('input', (e) => { $('p-volume-out').textContent = e.target.value + '%'; });
+		$('p-volume').addEventListener('change', (e) => { BA.player.save({ volume: Number(e.target.value) / 100 }); saved(); });
+		$('p-speed').addEventListener('change', (e) => { BA.player.save({ speed: Number(e.target.value) }); saved(); });
+		$('p-muted').addEventListener('change', (e) => { BA.player.save({ muted: e.target.checked }); saved(); });
+		$('p-autoplay').addEventListener('change', (e) => { BA.player.save({ autoplay: e.target.checked }); saved(); });
+		$('p-autonext').addEventListener('change', (e) => { BA.player.save({ autoNext: e.target.checked }); saved(); });
+		$('p-remember').addEventListener('change', (e) => { BA.player.save({ remember: e.target.checked }); saved(); });
+		$('p-reset').addEventListener('click', () => { BA.player.reset(); showPlayer(); toast('The player is back to its defaults.'); });
+		window.addEventListener('focus', showPlayer); // values changed inside the player (another tab) show up when you come back
+	}
+
 	async function init() {
+		initPlayer();
 		$('s-form').addEventListener('submit', submitForm);
 		$('s-ext').addEventListener('input', hintFromExt);
 		$('s-type').addEventListener('change', hintFromExt);

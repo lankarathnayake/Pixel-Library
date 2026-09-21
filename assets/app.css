@@ -66,7 +66,7 @@ input:focus, select:focus, .btn:focus-visible { outline: 2px solid var(--accent)
 	background: var(--panel);
 	border-bottom: 1px solid var(--border);
 }
-.brand { font-weight: 700; font-size: 16px; color: var(--text); text-decoration: none; margin-right: 8px; }
+.brand { font-weight: 700; font-size: 16px; color: var(--text); text-decoration: none; margin-right: 8px; white-space: nowrap; flex: none; }
 .crumb { color: var(--muted); }
 #q { flex: 0 1 340px; }
 
@@ -500,3 +500,17 @@ body.busy #busybar { opacity: 1; }
 .merge-name { flex: 1; font-weight: 600; }
 .merge-summary { margin: 0 0 12px; }
 .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ---- last watched highlight (library) ---- */
+.tile.last .thumb { border-color: var(--warn); box-shadow: 0 0 0 2px rgba(242, 184, 75, .35); }
+.last-tag { top: 6px; right: 6px; bottom: auto; left: auto; background: var(--warn); color: #201700; }
+.tile.pulse .thumb { animation: last-pulse 1.3s ease-in-out 2; }
+@keyframes last-pulse { 50% { box-shadow: 0 0 0 8px rgba(242, 184, 75, .55); } }
+
+/* ---- settings page: video player card ---- */
+#s-player { margin-bottom: 20px; }
+#s-player .check { margin: 8px 0; }
+.pl-row2 { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 12px; margin: 10px 0; }
+.pl-row2 > label { color: var(--muted); font-size: 13px; }
+.pl-ctl { display: flex; align-items: center; gap: 12px; }
+#p-volume { width: min(320px, 100%); accent-color: var(--accent); }

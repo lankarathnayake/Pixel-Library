@@ -15,6 +15,7 @@
 		selected: new Map(), lastClicked: -1, // selected: id -> item (kept after its tile leaves the window); lastClicked: list position
 		categories: [], collapsed: new Set(),
 		view: -1, dirty: false, focusCat: null,
+		lastId: null, lastAbs: -1, lastSig: null, // the file last opened in the viewer (highlighted in the grid), its list position, and the filters it belongs to
 	};
 
 	// ---------------------------------------------------------------- taxonomy
@@ -281,6 +282,11 @@
 	/** (Re)starts from the first rows of the current results. Called whenever the filters, sort or settings change. */
 	async function loadItems() {
 		const req = ++state.req;
+		const sig = query().toString();
+		if (sig !== state.lastSig) { // the filters / search / sort changed: the last watched file no longer belongs to this list
+			state.lastSig = sig;
+			forgetLast();
+		}
 		state.selected.clear();
 		state.lastClicked = -1;
 		setGridBusy(true);
@@ -565,6 +571,7 @@
 			tile.classList.add('selected');
 			tile.querySelector('.sel').checked = true;
 		}
+		if (state.lastId === item.id) markTile(tile, item);
 		return tile;
 	}
 
@@ -934,7 +941,67 @@
 			}
 		}
 		state.dirty = false;
+		markLast();
 		afterRender();
+	}
+
+	// ---- last watched: after you close the viewer, the file you were on is highlighted in the grid until the filters change or the page reloads ----
+
+	function markTile(tile, item) {
+		tile.classList.add('last');
+		tile.querySelector('.thumb').append(el('span', { className: 'badge last-tag' }, item.type === 'video' ? 'Last watched' : 'Last viewed'));
+	}
+
+	function forgetLast() {
+		state.lastId = null;
+		state.lastAbs = -1;
+		document.querySelectorAll('.tile.last').forEach((t) => { t.classList.remove('last', 'pulse'); const b = t.querySelector('.last-tag'); if (b) b.remove(); });
+		updateLastButton();
+	}
+
+	/** Puts the highlight on the tile of the last opened file (if its tile is in the window) and refreshes the sidebar button. */
+	function markLast() {
+		document.querySelectorAll('.tile.last').forEach((t) => { t.classList.remove('last', 'pulse'); const b = t.querySelector('.last-tag'); if (b) b.remove(); });
+		const i = state.items.findIndex((x) => x.id === state.lastId);
+		if (i >= 0 && state.els[i]) markTile(state.els[i], state.items[i]);
+		updateLastButton();
+	}
+
+	function updateLastButton() {
+		const b = $('btn-last');
+		if (b) b.hidden = state.lastId === null;
+	}
+
+	/** Scrolls to the last watched file, cutting a new window around it if it is far away in the list. */
+	async function goToLast() {
+		if (state.lastId === null) return;
+		let i = state.items.findIndex((x) => x.id === state.lastId);
+		if (i < 0 && state.lastAbs >= 0) {
+			await rewindow(state.lastAbs);
+			i = state.items.findIndex((x) => x.id === state.lastId);
+		}
+		if (i < 0 || !state.els[i]) return toast('The last watched file is no longer in this list.', true);
+		const tile = state.els[i];
+		tile.scrollIntoView({ block: 'center' });
+		scrollState.lastY = window.scrollY;
+		markLast();
+		tile.classList.add('pulse');
+		setTimeout(() => tile.classList.remove('pulse'), 2600);
+	}
+
+	/** The <video> of the viewer, set up from the player settings (Settings page): volume, mute, speed, autoplay, play-next. */
+	function playerVideo(item) {
+		const ps = BA.player.get();
+		const v = el('video', { src: 'file.php?id=' + item.id, controls: true, autoplay: ps.autoplay, playsInline: true });
+		v.volume = ps.volume;
+		v.muted = ps.muted;
+		v.defaultPlaybackRate = ps.speed;
+		v.playbackRate = ps.speed;
+		// what you change inside the player becomes the new setting for every video (unless "update these" is switched off)
+		v.addEventListener('volumechange', () => { if (BA.player.get().remember) BA.player.save({ volume: v.volume, muted: v.muted }); });
+		v.addEventListener('ratechange', () => { if (BA.player.get().remember) BA.player.save({ speed: v.playbackRate }); });
+		v.addEventListener('ended', () => { if (BA.player.get().autoNext && state.view >= 0 && state.view < state.total - 1) stepViewer(1); });
+		return v;
 	}
 
 	function stopStage() {
@@ -957,12 +1024,14 @@
 	function showViewer() {
 		const item = viewItem();
 		if (!item) return closeViewer();
+		state.lastId = item.id; // whatever the viewer shows last is the "last watched" file
+		state.lastAbs = state.view;
 		stopStage();
 		const missing = () => el('div', { className: 'v-missing' }, 'This file is no longer at its saved location.');
 		let media;
 		if (item.is_missing) media = missing();
 		else if (item.type === 'image') media = el('img', { src: 'file.php?id=' + item.id, alt: item.name, onerror: (e) => e.target.replaceWith(missing()) });
-		else media = el('video', { src: 'file.php?id=' + item.id, controls: true, autoplay: true, playsInline: true });
+		else media = playerVideo(item);
 		$('v-stage').append(media);
 		if (!item.is_missing) { // spinner until the image / first video frame has arrived (big videos take a moment)
 			const stage = $('v-stage');
@@ -1418,7 +1487,9 @@
 		$('fo-scan-all').addEventListener('click', () => withLoading($('fo-scan-all'), rescanAll));
 		$('bulk-pl-add').addEventListener('click', () => withLoading($('bulk-pl-add'), () => addToPlaylist($('bulk-pl').value, [...state.selected.keys()])));
 		$('f-nothumbs').addEventListener('change', (e) => { state.nothumbs = e.target.checked; loadItems(true); });
+		$('btn-last').addEventListener('click', goToLast);
 		$('btn-clear').addEventListener('click', () => {
+			forgetLast();
 			Object.assign(state, { q: '', type: '', untagged: false, missing: false, nothumbs: false, dmin: '', dmax: '' });
 			$('f-dur').value = ''; $('f-dur-custom').hidden = true; $('f-dmin').value = ''; $('f-dmax').value = '';
 			state.terms.clear();

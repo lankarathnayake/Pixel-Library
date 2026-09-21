@@ -165,5 +165,40 @@
 
 	document.body.append(el('div', { id: 'busybar', 'aria-hidden': 'true' }, el('i')));
 
-	window.BA = { api, el, toast, formatSize, formatDuration, debounce, withLoading, faceEl, photoUrl };
+	// ---- video player settings: kept in this browser, shared by the library (which applies them) and the Settings page ----
+	const PLAYER_KEY = 'pixel-library.player';
+	const PLAYER_DEFAULTS = { volume: 1, muted: false, speed: 1, autoplay: true, autoNext: false, remember: true };
+
+	function normalizePlayer(s) {
+		s = s || {};
+		const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+		const bool = (v, d) => (typeof v === 'boolean' ? v : d);
+		return {
+			volume: Math.round(num(s.volume, 0, 1, PLAYER_DEFAULTS.volume) * 100) / 100,
+			muted: bool(s.muted, PLAYER_DEFAULTS.muted),
+			speed: Math.round(num(s.speed, 0.25, 4, PLAYER_DEFAULTS.speed) * 100) / 100,
+			autoplay: bool(s.autoplay, PLAYER_DEFAULTS.autoplay),
+			autoNext: bool(s.autoNext, PLAYER_DEFAULTS.autoNext),
+			remember: bool(s.remember, PLAYER_DEFAULTS.remember),
+		};
+	}
+
+	const player = {
+		defaults: PLAYER_DEFAULTS,
+		get() {
+			try { return normalizePlayer(JSON.parse(localStorage.getItem(PLAYER_KEY) || '{}')); } catch (e) { return normalizePlayer({}); }
+		},
+		/** Merges the given values into the stored settings and returns the result. */
+		save(patch) {
+			const next = normalizePlayer(Object.assign({}, player.get(), patch));
+			try { localStorage.setItem(PLAYER_KEY, JSON.stringify(next)); } catch (e) { /* storage blocked: the settings just do not persist */ }
+			return next;
+		},
+		reset() {
+			try { localStorage.removeItem(PLAYER_KEY); } catch (e) { /* ignore */ }
+			return normalizePlayer({});
+		},
+	};
+
+	window.BA = { api, el, toast, formatSize, formatDuration, debounce, withLoading, faceEl, photoUrl, player };
 })();

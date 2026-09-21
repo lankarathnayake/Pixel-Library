@@ -23,6 +23,37 @@ require_once __DIR__ . '/common/bootstrap.php';
 </header>
 
 <div class="set-page">
+	<section class="set-card" id="s-player">
+		<h2>Video player</h2>
+		<p class="hint">
+			Master controls for the player in the library viewer. They apply to <strong>every</strong> video you open, and are kept in this browser.
+		</p>
+		<div class="pl-row2">
+			<label for="p-volume">Volume</label>
+			<div class="pl-ctl"><input id="p-volume" type="range" min="0" max="100" step="1"> <output id="p-volume-out" class="muted"></output></div>
+		</div>
+		<div class="pl-row2">
+			<label for="p-speed">Playback speed</label>
+			<div class="pl-ctl">
+				<select id="p-speed">
+					<option value="0.5">0.5x</option><option value="0.75">0.75x</option><option value="1">1x (normal)</option>
+					<option value="1.25">1.25x</option><option value="1.5">1.5x</option><option value="1.75">1.75x</option><option value="2">2x</option>
+				</select>
+			</div>
+		</div>
+		<label class="check"><input type="checkbox" id="p-muted"> Start every video muted</label>
+		<label class="check"><input type="checkbox" id="p-autoplay"> Start playing as soon as a video opens</label>
+		<label class="check"><input type="checkbox" id="p-autonext"> When a video ends, open and play the next file in the list</label>
+		<label class="check" title="Off = the values above are always used and changes made inside the player last only for that video"><input type="checkbox" id="p-remember"> When I change the volume or speed inside the player, use that from now on (updates the values above)</label>
+		<p class="hint small" style="margin-top:10px">
+			Also: after you close the viewer, the file you were on is <strong>highlighted</strong> in the library ("Last watched") until you change the
+			filters or reload the page, and <strong>Go to last watched</strong> in the sidebar jumps back to it.
+		</p>
+		<div class="set-foot" style="margin-top:12px; padding-top:12px">
+			<button id="p-reset" class="btn small" type="button">Reset the player to defaults</button>
+		</div>
+	</section>
+
 	<section class="set-card">
 		<h2>File formats</h2>
 		<p class="hint">

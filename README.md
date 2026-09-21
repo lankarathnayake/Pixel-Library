@@ -16,7 +16,8 @@ browse, search and filter it.
 - **Video previews.** ffmpeg pulls 5-10 frames from each video; hovering a video tile scrubs through them
   (left edge = start, right edge = end) with a time label. See "Video previews" below.
 - **Video length filter, Playlists, Rescan folders, Duplicate finder** - see the sections of the same names below.
-- **Settings** (top bar): choose which file formats are registered - add the ones you are missing, remove the ones you do not need.
+- **Settings** (top bar): choose which file formats are registered (add the ones you are missing, remove the ones you do not need), and
+  set the video player's master controls (volume, speed, autoplay, play-next). The file you last watched stays highlighted in the grid.
 - **Actors page** (`actors.php`, "Actors" in the top bar): a page to search, sort, create and delete actors, with a profile for
   each - see "Actors" below.
 - **Categories and terms.** Make any categories you like (starter: *Tags*, *Actors*). Each holds terms
@@ -193,6 +194,24 @@ Put a tag in the wrong category, or ended up with two terms for the same thing (
   together, custom fields and list memberships it lacked are taken over, and an unused photo file is deleted. To merge terms that
   are in different categories, move them into one category first.
 - Your files are never touched, and nothing is added to or removed from the library by either action.
+## Video player controls and "last watched"
+
+The viewer plays videos with your browser's own player; **Settings -> Video player** puts master controls over it. They are kept in
+this browser (like the Display settings) and apply to **every** video you open:
+
+- **Volume** and **start muted**, and **playback speed**.
+- **Start playing as soon as a video opens** (autoplay) and **when a video ends, open and play the next file in the list** (handy for
+  watching a run of videos hands-free).
+- **Use what I change inside the player**: on (default), turning the volume or speed up or down in the player becomes the new setting for
+  all later videos; off, the values on the Settings page are always used and a change lasts only for that video.
+- **Reset the player to defaults**.
+
+**Last watched:** when you close the viewer, the file you were on is **highlighted** in the grid (amber outline, "Last watched" /
+"Last viewed" tag) so you can see where you got to after watching a run of videos. It stays until you change the filters, search or
+sort (or press **Clear filters**) or reload the page. If you have scrolled or jumped far away, **Go to last watched** (sidebar, Tools)
+brings you back to it, even in a huge list. Nothing about this is stored: it only lives in the open page.
+
+(The player itself is the browser's: which formats *play* still depends on its codecs. For the rest use "Play in PotPlayer / VLC".)
 ## Settings: file formats
 
 **Settings** (top bar, `settings.php`) controls which file extensions the app registers, so you are not limited to my list:

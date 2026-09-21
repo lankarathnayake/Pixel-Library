@@ -87,6 +87,7 @@ require_once __DIR__ . '/common/bootstrap.php';
 			<strong class="side-title">Tools</strong>
 			<button id="btn-folders" class="btn small" type="button" title="The folders you added: look for new files in them">Folders / rescan...</button>
 			<a class="btn small" href="duplicates.php" title="Find identical files and files with the same length">Find duplicates</a>
+			<button id="btn-last" class="btn small" type="button" hidden title="Jump to the file you last had open in the viewer">Go to last watched</button>
 			<button id="btn-check" class="btn small" type="button" title="Re-check every file against the disk">Check for missing files</button>
 		</div>
 	</aside>
