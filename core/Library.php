@@ -132,7 +132,7 @@ class Library {
 	}
 
 	/**
-	 * @param array $f filters: q, type, terms (term ids), untagged, missing, sort
+	 * @param array $f filters: q, type, terms (term ids), not_terms (term ids to leave out), untagged, missing, sort
 	 * @return array{items: array, total: int, has_more: bool}
 	 */
 	public static function search(array $f, int $page = 1, int $perPage = 60, ?int $offset = null): array {
@@ -187,8 +187,15 @@ class Library {
 			}
 		}
 
+		// Exclusion filter: files carrying ANY of these terms are left out (unknown ids simply exclude nothing).
+		$notIds = array_values(array_unique(array_filter(array_map('intval', (array) ($f['not_terms'] ?? [])), fn($i) => $i > 0)));
+		if ($notIds) {
+			$where[] = 'NOT EXISTS (SELECT 1 FROM media_term x WHERE x.media_id = m.id AND x.term_id IN (' . Db::placeholders(count($notIds)) . '))';
+			array_push($args, ...$notIds);
+		}
+
 		$whereSql = $where ? 'WHERE ' . implode(' AND ', $where) : '';
-		$order = self::SORTS[$f['sort'] ?? ''] ?? self::SORTS['added_desc'];
+		$order =self::SORTS[$f['sort'] ?? ''] ?? self::SORTS['added_desc'];
 		$page = max(1, $page);
 		$perPage = max(1, min(200, $perPage));
 		// An explicit $offset (any row, not just a page boundary) lets the UI load a sliding window of the list.

@@ -167,6 +167,11 @@ check(Library::search(['terms' => [$summer, $john]])['total'] === 0, 'AND across
 check(Library::search(['terms' => [$summer, $jane]])['total'] === 3, 'AND across categories (match)');
 check(Library::search(['untagged' => 1])['total'] === 2, 'untagged');
 check(Library::search(['terms' => [999999]])['total'] === 0, 'unknown term id -> nothing');
+$allCount = Library::search([])['total'];
+check(Library::search(['not_terms' => [$beach]])['total'] === $allCount - 3, 'exclude one term');
+check(Library::search(['not_terms' => [$jane, $john]])['total'] === $allCount - 4, 'excluding several terms drops files with any of them');
+check(Library::search(['terms' => [$summer], 'not_terms' => [$jane]])['total'] === 0, 'include + exclude combine (AND)');
+check(Library::search(['not_terms' => [999999]])['total'] === $allCount, 'excluding an unknown term id excludes nothing');
 $tree = Taxonomy::tree();
 $treeTags = array_values(array_filter($tree, fn($c) => $c['id'] === $tags))[0];
 $beachNode = array_values(array_filter($treeTags['terms'], fn($t) => $t['id'] === $beach))[0];

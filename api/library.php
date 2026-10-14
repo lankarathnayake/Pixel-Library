@@ -1,6 +1,6 @@
 <?php
 /**
- * GET  api/library.php               search/list media (q, type, terms[], untagged, missing, sort, page | offset+limit)
+ * GET  api/library.php               search/list media (q, type, terms[], not_terms[], untagged, missing, sort, page | offset+limit)
  * GET  api/library.php?id=N          one media item's details
  * GET  api/library.php?ids=1,2,3     several items, in the list shape (to refresh tiles)
  * GET  api/library.php?thumbs=status video preview queue counts + whether ffmpeg is available
