@@ -10,7 +10,7 @@
 
 	const state = {
 		q: '', type: '', sort: 'added_desc', untagged: false, missing: false, nothumbs: false, dmin: '', dmax: '',
-		terms: new Set(),
+		terms: new Set(), notTerms: new Set(), facetText: new Map(), // terms a file must have (OR in a category, AND across) / terms a file must not have
 		items: [], els: [], start: 0, total: 0, cols: 1, pitch: 0, gap: 12, winBusy: false, req: 0, // the window: see "grid" below
 		selected: new Map(), lastClicked: -1, // selected: id -> item (kept after its tile leaves the window); lastClicked: list position
 		categories: [], collapsed: new Set(),
@@ -29,6 +29,7 @@
 		for (const c of state.categories) c.terms.sort(byName);
 		const valid = new Set(state.categories.flatMap((c) => c.terms.map((t) => t.id)));
 		for (const id of [...state.terms]) if (!valid.has(id)) state.terms.delete(id); // term was deleted
+		for (const id of [...state.notTerms]) if (!valid.has(id)) state.notTerms.delete(id);
 		renderFacets();
 		renderDatalists();
 		renderBulkCategories();
@@ -55,24 +56,31 @@
 		for (const cat of state.categories) {
 			const list = el('div', { className: 'facet-list' });
 			let shown = cat.terms; // the terms the list currently offers (all, or those matching the Filter box)
+			let cur = state.facetText.get(cat.id) || ''; // the text in this category's Filter box (kept across re-renders)
 			const fill = (filter) => {
-				const f = (filter || '').trim().toLowerCase();
+				if (filter !== undefined) { cur = filter; state.facetText.set(cat.id, cur); }
+				const f = cur.trim().toLowerCase();
 				shown = cat.terms.filter((t) => !f || t.name.toLowerCase().includes(f));
 				list.replaceChildren();
 				for (const t of cat.terms) {
-					if (f && !t.name.toLowerCase().includes(f) && !state.terms.has(t.id)) continue;
-					list.append(el('label', { className: 'check facet-item' },
+					const out = state.notTerms.has(t.id);
+					if (f && !t.name.toLowerCase().includes(f) && !state.terms.has(t.id) && !out) continue;
+					list.append(el('label', { className: 'check facet-item' + (out ? ' excluded' : '') },
 						el('input', { type: 'checkbox', checked: state.terms.has(t.id), onchange: (e) => toggleTerm(t.id, e.target.checked) }),
+						el('button', {
+							className: 'facet-not' + (out ? ' on' : ''), type: 'button', title: out ? 'Stop excluding "' + t.name + '"' : 'Exclude files with "' + t.name + '"',
+							onclick: (e) => { e.preventDefault(); toggleExclude(t.id, !out); },
+						}, '−'),
 						el('span', { className: 'name', title: t.name }, t.photo ? faceEl(t.id, t.name, t.photo, t.full_name, 28) : null, el('span', { className: 'nm' }, t.name)), // photo (if any) + name; hover enlarges the photo
 						el('span', { className: 'count' }, t.count)));
 				}
 				if (!list.children.length) list.append(el('div', { className: 'muted small' }, cat.terms.length ? 'No match' : 'Nothing here yet'));
 			};
 			fill();
-			const filterBox = cat.terms.length > 8 ? el('input', { type: 'search', className: 'facet-filter', placeholder: 'Filter...', oninput: (e) => fill(e.target.value) }) : null;
-			const setShown = (on) => { // tick / untick every offered term, then reload once
-				for (const t of shown) on ? state.terms.add(t.id) : state.terms.delete(t.id);
-				fill(filterBox ? filterBox.value : '');
+			const filterBox = cat.terms.length > 8 ? el('input', { type: 'search', className: 'facet-filter', placeholder: 'Filter...', value: cur, oninput: (e) => fill(e.target.value) }) : null;
+			const setShown = (on) => { // tick / untick every offered term (either way it stops being excluded), then reload once
+				for (const t of shown) { on ? state.terms.add(t.id) : state.terms.delete(t.id); state.notTerms.delete(t.id); }
+				fill();
 				loadItems(true);
 			};
 			const bulk = cat.terms.length > 1 ? el('div', { className: 'facet-bulk' },
@@ -91,6 +99,13 @@
 
 	function toggleTerm(id, on) {
 		on ? state.terms.add(id) : state.terms.delete(id);
+		if (on && state.notTerms.delete(id)) renderFacets(); // a term is either wanted or excluded, never both
+		loadItems(true);
+	}
+
+	function toggleExclude(id, on) {
+		if (on) { state.notTerms.add(id); state.terms.delete(id); } else state.notTerms.delete(id);
+		renderFacets();
 		loadItems(true);
 	}
 
@@ -143,12 +158,13 @@
 		if (state.dmin !== '') p.set('dmin', state.dmin);
 		if (state.dmax !== '') p.set('dmax', state.dmax);
 		state.terms.forEach((id) => p.append('terms[]', id));
+		state.notTerms.forEach((id) => p.append('not_terms[]', id));
 		p.set('sort', state.sort);
 		return p;
 	}
 
 	function filtersActive() {
-		return !!(state.q || state.type || state.untagged || state.missing || state.nothumbs || state.dmin !== '' || state.dmax !== '' || state.terms.size);
+		return !!(state.q || state.type || state.untagged || state.missing || state.nothumbs || state.dmin !== '' || state.dmax !== '' || state.terms.size || state.notTerms.size);
 	}
 
 	/** Fades the grid and shows the "Loading..." pill while a fresh result set is fetched. */
@@ -853,7 +869,7 @@
 				+ (missing.length ? ' Not found: ' + missing.join(', ') + '.' : ''), missing.length > 0);
 			$('bulk-term').value = '';
 			await loadTaxonomy();
-			if (state.untagged || state.terms.size) loadItems(true); // results may have changed
+			if (state.untagged || state.terms.size || state.notTerms.size) loadItems(true); // results may have changed
 		} catch (e) { toast(e.message, true); }
 	}
 
@@ -944,7 +960,7 @@
 		document.body.classList.remove('noscroll');
 		const tile = state.els[state.view - state.start];
 		state.view = -1;
-		if (state.dirty && (state.untagged || state.terms.size)) loadItems(true);
+		if (state.dirty && (state.untagged || state.terms.size || state.notTerms.size)) loadItems(true);
 		else if (tile && tile.isConnected) { // the viewer may have moved the window: bring the last-viewed tile back into view
 			const r = tile.getBoundingClientRect();
 			if (r.top < topbarHeight() || r.bottom > window.innerHeight) {
@@ -1505,6 +1521,7 @@
 			Object.assign(state, { q: '', type: '', untagged: false, missing: false, nothumbs: false, dmin: '', dmax: '' });
 			$('f-dur').value = ''; $('f-dur-custom').hidden = true; $('f-dmin').value = ''; $('f-dmax').value = '';
 			state.terms.clear();
+			state.notTerms.clear(); state.facetText.clear();
 			$('q').value = ''; $('type').value = ''; $('f-untagged').checked = false; $('f-missing').checked = false; $('f-nothumbs').checked = false;
 			renderFacets();
 			loadItems(true);
