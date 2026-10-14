@@ -30,7 +30,7 @@
 		const valid = new Set(state.categories.flatMap((c) => c.terms.map((t) => t.id)));
 		for (const id of [...state.terms]) if (!valid.has(id)) state.terms.delete(id); // term was deleted
 		for (const id of [...state.notTerms]) if (!valid.has(id)) state.notTerms.delete(id);
-		renderFacets();
+		refreshFacets();
 		renderDatalists();
 		renderBulkCategories();
 	}
@@ -46,6 +46,23 @@
 			el('datalist', { id: 'dl-' + c.id }, c.terms.map((t) => el('option', { value: t.name })))));
 	}
 
+	const FACET_LIMIT = 10; // terms a sidebar category lists; the rest are behind its "Show all" button (a dialog)
+
+	/** One term row: tick box (include), a - button (exclude), photo + name, file count. Used by the sidebar and the "all terms" dialog. */
+	function termRow(t) {
+		const out = state.notTerms.has(t.id);
+		return el('label', { className: 'check facet-item' + (out ? ' excluded' : '') },
+			el('input', { type: 'checkbox', checked: state.terms.has(t.id), onchange: (e) => toggleTerm(t.id, e.target.checked) }),
+			el('button', {
+				className: 'facet-not' + (out ? ' on' : ''), type: 'button', title: out ? 'Stop excluding "' + t.name + '"' : 'Exclude files with "' + t.name + '"',
+				onclick: (e) => { e.preventDefault(); toggleExclude(t.id, !out); },
+			}, '−'),
+			el('span', { className: 'name', title: t.name }, t.photo ? faceEl(t.id, t.name, t.photo, t.full_name, 28) : null, el('span', { className: 'nm' }, t.name)), // photo (if any) + name; hover enlarges the photo
+			el('span', { className: 'count' }, t.count));
+	}
+
+	const matchesText = (t, f) => !f || t.name.toLowerCase().includes(f);
+
 	function renderFacets() {
 		const box = $('facets');
 		box.replaceChildren();
@@ -55,37 +72,25 @@
 		}
 		for (const cat of state.categories) {
 			const list = el('div', { className: 'facet-list' });
-			let shown = cat.terms; // the terms the list currently offers (all, or those matching the Filter box)
+			let shown = cat.terms; // every term matching the Filter box (the list below shows only the first FACET_LIMIT of them)
 			let cur = state.facetText.get(cat.id) || ''; // the text in this category's Filter box (kept across re-renders)
 			const fill = (filter) => {
 				if (filter !== undefined) { cur = filter; state.facetText.set(cat.id, cur); }
 				const f = cur.trim().toLowerCase();
-				shown = cat.terms.filter((t) => !f || t.name.toLowerCase().includes(f));
-				list.replaceChildren();
-				for (const t of cat.terms) {
-					const out = state.notTerms.has(t.id);
-					if (f && !t.name.toLowerCase().includes(f) && !state.terms.has(t.id) && !out) continue;
-					list.append(el('label', { className: 'check facet-item' + (out ? ' excluded' : '') },
-						el('input', { type: 'checkbox', checked: state.terms.has(t.id), onchange: (e) => toggleTerm(t.id, e.target.checked) }),
-						el('button', {
-							className: 'facet-not' + (out ? ' on' : ''), type: 'button', title: out ? 'Stop excluding "' + t.name + '"' : 'Exclude files with "' + t.name + '"',
-							onclick: (e) => { e.preventDefault(); toggleExclude(t.id, !out); },
-						}, '−'),
-						el('span', { className: 'name', title: t.name }, t.photo ? faceEl(t.id, t.name, t.photo, t.full_name, 28) : null, el('span', { className: 'nm' }, t.name)), // photo (if any) + name; hover enlarges the photo
-						el('span', { className: 'count' }, t.count)));
-				}
+				shown = cat.terms.filter((t) => matchesText(t, f));
+				const first = shown.slice(0, FACET_LIMIT);
+				// ticked / excluded terms always stay visible, even past the limit or outside the Filter text
+				const kept = cat.terms.filter((t) => (state.terms.has(t.id) || state.notTerms.has(t.id)) && !first.includes(t));
+				list.replaceChildren(...[...first, ...kept].map(termRow));
 				if (!list.children.length) list.append(el('div', { className: 'muted small' }, cat.terms.length ? 'No match' : 'Nothing here yet'));
 			};
 			fill();
 			const filterBox = cat.terms.length > 8 ? el('input', { type: 'search', className: 'facet-filter', placeholder: 'Filter...', value: cur, oninput: (e) => fill(e.target.value) }) : null;
-			const setShown = (on) => { // tick / untick every offered term (either way it stops being excluded), then reload once
-				for (const t of shown) { on ? state.terms.add(t.id) : state.terms.delete(t.id); state.notTerms.delete(t.id); }
-				fill();
-				loadItems(true);
-			};
 			const bulk = cat.terms.length > 1 ? el('div', { className: 'facet-bulk' },
-				el('button', { className: 'btn small', type: 'button', onclick: () => setShown(true) }, 'Select all'),
-				el('button', { className: 'btn small', type: 'button', onclick: () => setShown(false) }, 'Clear')) : null;
+				el('button', { className: 'btn small', type: 'button', onclick: () => setTerms(shown, true) }, 'Select all'),
+				el('button', { className: 'btn small', type: 'button', onclick: () => setTerms(shown, false) }, 'Clear')) : null;
+			const more = cat.terms.length > FACET_LIMIT
+				? el('button', { className: 'btn small facet-more', type: 'button', onclick: () => openFacetModal(cat.id) }, 'Show all ' + cat.terms.length + '…') : null;
 			box.append(el('details', {
 				className: 'facet', open: !state.collapsed.has(cat.id),
 				ontoggle: (e) => { e.target.open ? state.collapsed.delete(cat.id) : state.collapsed.add(cat.id); },
@@ -93,20 +98,70 @@
 			el('summary', {}, cat.name),
 			filterBox,
 			bulk,
-			list));
+			list,
+			more));
 		}
+	}
+
+	/** Redraws the sidebar and, if it is open, the "all terms" dialog. */
+	function refreshFacets() {
+		renderFacets();
+		if (fmCat !== null) renderFacetModal();
+	}
+
+	/** Tick (on) or untick (off) several terms at once; either way they stop being excluded. Reloads the results once. */
+	function setTerms(terms, on) {
+		for (const t of terms) { on ? state.terms.add(t.id) : state.terms.delete(t.id); state.notTerms.delete(t.id); }
+		refreshFacets();
+		loadItems(true);
 	}
 
 	function toggleTerm(id, on) {
 		on ? state.terms.add(id) : state.terms.delete(id);
-		if (on && state.notTerms.delete(id)) renderFacets(); // a term is either wanted or excluded, never both
+		const wasExcluded = on && state.notTerms.delete(id); // a term is either wanted or excluded, never both
+		if (wasExcluded || fmCat !== null) refreshFacets(); // keep the sidebar and the dialog in step
 		loadItems(true);
 	}
 
 	function toggleExclude(id, on) {
 		if (on) { state.notTerms.add(id); state.terms.delete(id); } else state.notTerms.delete(id);
-		renderFacets();
+		refreshFacets();
 		loadItems(true);
+	}
+
+	// ---- "Show all" dialog: every term of one category, tickable, with its own search box ----
+
+	let fmCat = null; // id of the category the dialog shows, null while it is closed
+
+	function openFacetModal(catId) {
+		fmCat = catId;
+		$('fm-q').value = '';
+		$('facet-modal').hidden = false;
+		renderFacetModal();
+		$('fm-q').focus();
+	}
+
+	function closeFacetModal() {
+		fmCat = null;
+		$('facet-modal').hidden = true;
+	}
+
+	function fmMatches() {
+		const cat = state.categories.find((c) => c.id === fmCat);
+		const f = $('fm-q').value.trim().toLowerCase();
+		return cat ? { cat, terms: cat.terms.filter((t) => matchesText(t, f)) } : null;
+	}
+
+	function renderFacetModal() {
+		const m = fmMatches();
+		if (!m) { closeFacetModal(); return; } // the category was deleted meanwhile
+		const scroll = $('fm-list').scrollTop;
+		$('fm-title').textContent = m.cat.name;
+		$('fm-list').replaceChildren(...(m.terms.length ? m.terms.map(termRow) : [el('div', { className: 'muted small' }, 'No match')]));
+		$('fm-list').scrollTop = scroll;
+		const on = m.cat.terms.filter((t) => state.terms.has(t.id)).length;
+		const off = m.cat.terms.filter((t) => state.notTerms.has(t.id)).length;
+		$('fm-info').textContent = m.terms.length + ' of ' + m.cat.terms.length + ' shown' + (on ? ' · ' + on + ' ticked' : '') + (off ? ' · ' + off + ' excluded' : '');
 	}
 
 	// ---- display settings (kept in this browser) ----------------------------------------------------
@@ -1510,6 +1565,11 @@
 		$('f-dmin').addEventListener('input', debounce(applyCustomDuration, 400));
 		$('f-dmax').addEventListener('input', debounce(applyCustomDuration, 400));
 		$('btn-folders').addEventListener('click', openFolders);
+		$('fm-close').addEventListener('click', closeFacetModal);
+		$('fm-done').addEventListener('click', closeFacetModal);
+		$('fm-q').addEventListener('input', renderFacetModal);
+		$('fm-all').addEventListener('click', () => { const m = fmMatches(); if (m) setTerms(m.terms, true); });
+		$('fm-none').addEventListener('click', () => { const m = fmMatches(); if (m) setTerms(m.terms, false); });
 		$('fo-close').addEventListener('click', () => { $('folders').hidden = true; });
 		$('fo-form').addEventListener('submit', rememberFolder);
 		$('fo-scan-all').addEventListener('click', () => withLoading($('fo-scan-all'), rescanAll));
@@ -1523,7 +1583,7 @@
 			state.terms.clear();
 			state.notTerms.clear(); state.facetText.clear();
 			$('q').value = ''; $('type').value = ''; $('f-untagged').checked = false; $('f-missing').checked = false; $('f-nothumbs').checked = false;
-			renderFacets();
+			refreshFacets();
 			loadItems(true);
 		});
 		$('btn-check').addEventListener('click', () => withLoading($('btn-check'), async () => {
@@ -1584,6 +1644,10 @@
 
 		document.addEventListener('keydown', (e) => {
 			const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+			if (!$('facet-modal').hidden) { // the "all terms" dialog is modal: only it reacts
+				if (e.key === 'Escape') closeFacetModal();
+				return;
+			}
 			if (!$('folders').hidden) { // the folders dialog is modal too
 				if (e.key === 'Escape') $('folders').hidden = true;
 				return;
