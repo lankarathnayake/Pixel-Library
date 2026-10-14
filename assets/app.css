@@ -88,6 +88,7 @@ input:focus, select:focus, .btn:focus-visible { outline: 2px solid var(--accent)
 .facet { margin-bottom: 10px; }
 .facet summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
 .facet-filter { width: 100%; margin: 4px 0 6px; padding: 5px 9px; }
+.facet-bulk { display: flex; gap: 6px; margin: 0 0 6px; }
 .facet-list { max-height: 260px; overflow-y: auto; }
 .facet-item { padding: 2px 0; }
 .facet-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

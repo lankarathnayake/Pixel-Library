@@ -54,8 +54,10 @@
 		}
 		for (const cat of state.categories) {
 			const list = el('div', { className: 'facet-list' });
+			let shown = cat.terms; // the terms the list currently offers (all, or those matching the Filter box)
 			const fill = (filter) => {
 				const f = (filter || '').trim().toLowerCase();
+				shown = cat.terms.filter((t) => !f || t.name.toLowerCase().includes(f));
 				list.replaceChildren();
 				for (const t of cat.terms) {
 					if (f && !t.name.toLowerCase().includes(f) && !state.terms.has(t.id)) continue;
@@ -67,12 +69,22 @@
 				if (!list.children.length) list.append(el('div', { className: 'muted small' }, cat.terms.length ? 'No match' : 'Nothing here yet'));
 			};
 			fill();
+			const filterBox = cat.terms.length > 8 ? el('input', { type: 'search', className: 'facet-filter', placeholder: 'Filter...', oninput: (e) => fill(e.target.value) }) : null;
+			const setShown = (on) => { // tick / untick every offered term, then reload once
+				for (const t of shown) on ? state.terms.add(t.id) : state.terms.delete(t.id);
+				fill(filterBox ? filterBox.value : '');
+				loadItems(true);
+			};
+			const bulk = cat.terms.length > 1 ? el('div', { className: 'facet-bulk' },
+				el('button', { className: 'btn small', type: 'button', onclick: () => setShown(true) }, 'Select all'),
+				el('button', { className: 'btn small', type: 'button', onclick: () => setShown(false) }, 'Clear')) : null;
 			box.append(el('details', {
 				className: 'facet', open: !state.collapsed.has(cat.id),
 				ontoggle: (e) => { e.target.open ? state.collapsed.delete(cat.id) : state.collapsed.add(cat.id); },
 			},
 			el('summary', {}, cat.name),
-			cat.terms.length > 8 ? el('input', { type: 'search', className: 'facet-filter', placeholder: 'Filter...', oninput: (e) => fill(e.target.value) }) : null,
+			filterBox,
+			bulk,
 			list));
 		}
 	}
