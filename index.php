@@ -159,6 +159,20 @@ require_once __DIR__ . '/common/bootstrap.php';
 	</div>
 </div>
 
+<!-- All terms of one filter category -->
+<div id="facet-modal" class="modal picker" hidden>
+	<div class="dialog facet-dialog" role="dialog" aria-labelledby="fm-title">
+		<div class="dialog-head"><h2 id="fm-title">Filter</h2><button class="close-x" id="fm-close" type="button" aria-label="Close">&times;</button></div>
+		<div class="fm-tools">
+			<input id="fm-q" type="search" placeholder="Search..." autocomplete="off">
+			<button class="btn small" id="fm-all" type="button">Select all</button>
+			<button class="btn small" id="fm-none" type="button">Clear</button>
+		</div>
+		<div id="fm-list" class="dialog-scroll fm-list"></div>
+		<div class="dialog-foot fm-foot"><span id="fm-info" class="muted small"></span><button class="btn primary" id="fm-done" type="button">Done</button></div>
+	</div>
+</div>
+
 <!-- Folders / rescan -->
 <div id="folders" class="modal picker" hidden>
 	<div class="dialog folders-dialog" role="dialog" aria-labelledby="fo-title">

@@ -519,3 +519,13 @@ body.busy #busybar { opacity: 1; }
 .pl-row2 > label { color: var(--muted); font-size: 13px; }
 .pl-ctl { display: flex; align-items: center; gap: 12px; }
 #p-volume { width: min(320px, 100%); accent-color: var(--accent); }
+
+/* "Show all" dialog for one filter category */
+.facet-more { margin-top: 6px; }
+.facet-dialog { width: min(900px, 100%); }
+.fm-tools { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+.fm-tools input { flex: 1; min-width: 0; padding: 6px 10px; }
+.fm-list { columns: 240px; column-gap: 24px; }
+.fm-list .facet-item { break-inside: avoid; padding: 3px 0; }
+.fm-list .facet-item .name { flex: 1; }
+.fm-foot { align-items: center; justify-content: space-between; }
