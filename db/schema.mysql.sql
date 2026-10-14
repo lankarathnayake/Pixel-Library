@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS media (
 	height      INT UNSIGNED NULL,
 	duration    DECIMAL(10,2) NULL,               -- videos only: length in seconds (filled when previews are made)
 	is_missing  TINYINT(1) NOT NULL DEFAULT 0,    -- file no longer found at `path`
+	is_favorite TINYINT(1) NOT NULL DEFAULT 0,    -- the heart in the viewer (1 = favourite)
 	thumb_status      TINYINT NOT NULL DEFAULT 0, -- videos: 0 pending, 1 done, 2 failed, 3 in progress
 	thumb_claimed_at  DATETIME NULL,              -- when a worker took it (stale claims are retried)
 	content_hash      CHAR(40) NULL,              -- duplicate finder: hash of size + sampled bytes (NULL = not hashed yet)
@@ -26,6 +27,7 @@ CREATE TABLE IF NOT EXISTS media (
 	KEY idx_media_name (name),
 	KEY idx_media_added (added_at),
 	KEY idx_media_missing (is_missing),
+	KEY idx_media_favorite (is_favorite),
 	KEY idx_media_thumb_status (thumb_status),
 	KEY idx_media_hash (content_hash),
 	KEY idx_media_size (size)

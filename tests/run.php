@@ -172,6 +172,15 @@ check(Library::search(['not_terms' => [$beach]])['total'] === $allCount - 3, 'ex
 check(Library::search(['not_terms' => [$jane, $john]])['total'] === $allCount - 4, 'excluding several terms drops files with any of them');
 check(Library::search(['terms' => [$summer], 'not_terms' => [$jane]])['total'] === 0, 'include + exclude combine (AND)');
 check(Library::search(['not_terms' => [999999]])['total'] === $allCount, 'excluding an unknown term id excludes nothing');
+$favIds = array_column(Library::search([])['items'], 'id');
+check(Library::search(['favorite' => 1])['total'] === 0, 'no favourites to begin with');
+check(Library::setFavorite([$favIds[0], $favIds[1], $favIds[1], 0], true) === 2, 'setFavorite: two files hearted (repeats and bad ids ignored)');
+check(Library::search(['favorite' => 1])['total'] === 2, 'favourites only');
+check(Library::search(['favorite' => 1, 'terms' => [$beach]])['total'] <= 2, 'favourites combine with other filters');
+check(Library::detail($favIds[0])['is_favorite'] === true && Library::byIds([$favIds[2]])[0]['is_favorite'] === false, 'is_favorite in detail and list items');
+Library::setFavorite([$favIds[0], $favIds[1]], false);
+check(Library::search(['favorite' => 1])['total'] === 0, 'setFavorite off');
+check(throwsApi(fn() => Library::reveal(999999), 404), 'reveal: unknown file -> 404');
 $tree = Taxonomy::tree();
 $treeTags = array_values(array_filter($tree, fn($c) => $c['id'] === $tags))[0];
 $beachNode = array_values(array_filter($treeTags['terms'], fn($t) => $t['id'] === $beach))[0];

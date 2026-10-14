@@ -1,10 +1,11 @@
 <?php
 /**
- * GET  api/library.php               search/list media (q, type, terms[], not_terms[], untagged, missing, sort, page | offset+limit)
+ * GET  api/library.php               search/list media (q, type, terms[], not_terms[], untagged, favorite, missing, sort, page | offset+limit)
  * GET  api/library.php?id=N          one media item's details
  * GET  api/library.php?ids=1,2,3     several items, in the list shape (to refresh tiles)
  * GET  api/library.php?thumbs=status video preview queue counts + whether ffmpeg is available
- * POST api/library.php  {action: add | remove | delete_files | check | thumbs_run | thumbs_queue | thumbs_retry}
+ * POST api/library.php  {action: add | remove | delete_files | favorite | reveal | check | thumbs_run | thumbs_queue | thumbs_retry}
+ *   favorite {ids, on}                 sets / clears the heart;  reveal {id} shows the file in Explorer
  *   remove {ids}                       takes files out of the library only (files stay on disk)
  *   delete_files {ids, confirm:"DELETE"}  PERMANENTLY deletes the files from disk + their entries/tags/previews
  *   thumbs_queue {ids, force}  queue specific videos; thumbs_run {ids?} works only on those (else the whole queue)
@@ -62,6 +63,12 @@ api_run(function () {
 
 		case 'remove':
 			return ['removed' => Library::remove((array) ($in['ids'] ?? []))];
+
+		case 'favorite':
+			return ['changed' => Library::setFavorite((array) ($in['ids'] ?? []), !empty($in['on']))];
+
+		case 'reveal':
+			return Library::reveal((int) ($in['id'] ?? 0));
 
 		case 'check':
 			return Library::checkMissing();

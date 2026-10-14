@@ -132,7 +132,7 @@ class Library {
 	}
 
 	/**
-	 * @param array $f filters: q, type, terms (term ids), not_terms (term ids to leave out), untagged, missing, sort
+	 * @param array $f filters: q, type, terms (term ids), not_terms (term ids to leave out), untagged, favorite, missing, sort
 	 * @return array{items: array, total: int, has_more: bool}
 	 */
 	public static function search(array $f, int $page = 1, int $perPage = 60, ?int $offset = null): array {
@@ -164,6 +164,9 @@ class Library {
 		if (!empty($f['nothumbs'])) { // videos that have no preview frames (pending, failed or never generated)
 			$where[] = "m.type = 'video'";
 			$where[] = 'NOT EXISTS (SELECT 1 FROM media_thumb p WHERE p.media_id = m.id)';
+		}
+		if (!empty($f['favorite'])) {
+			$where[] = 'm.is_favorite = 1';
 		}
 		if (!empty($f['untagged'])) {
 			$where[] = 'NOT EXISTS (SELECT 1 FROM media_term x WHERE x.media_id = m.id)';
@@ -225,7 +228,7 @@ class Library {
 		return self::listItems($stmt->fetchAll());
 	}
 
-	private const LIST_COLUMNS = 'm.id, m.name, m.type, m.ext, m.size, m.width, m.height, m.duration, m.is_missing, m.thumb_status';
+	private const LIST_COLUMNS = 'm.id, m.name, m.type, m.ext, m.size, m.width, m.height, m.duration, m.is_missing, m.is_favorite, m.thumb_status';
 
 	/** Rows -> API items. Videos also carry `thumbs`: the time (seconds) of each preview frame, in order. */
 	private static function listItems(array $rows): array {
@@ -246,6 +249,7 @@ class Library {
 				'width' => $r['width'] === null ? null : (int) $r['width'],
 				'height' => $r['height'] === null ? null : (int) $r['height'],
 				'is_missing' => (bool) $r['is_missing'],
+				'is_favorite' => (bool) $r['is_favorite'],
 			];
 			if ($r['type'] === 'video') {
 				$item['duration'] = $r['duration'] === null ? null : (float) $r['duration'];
@@ -282,10 +286,50 @@ class Library {
 			'height' => $r['height'] === null ? null : (int) $r['height'],
 			'duration' => $r['duration'] === null ? null : (float) $r['duration'],
 			'is_missing' => (bool) $r['is_missing'],
+			'is_favorite' => (bool) $r['is_favorite'],
 			'added_at' => $r['added_at'],
 			'file_mtime' => $r['file_mtime'],
 			'terms' => Taxonomy::forMedia([$id])[$id] ?? [],
 		];
+	}
+
+	/** Sets or clears the heart on some files. Returns how many files were changed. */
+	public static function setFavorite(array $ids, bool $on): int {
+		$ids = array_values(array_unique(array_filter(array_map('intval', $ids), fn($i) => $i > 0)));
+		$changed = 0;
+		foreach (array_chunk($ids, 500) as $chunk) {
+			$stmt = Db::pdo()->prepare('UPDATE media SET is_favorite = ? WHERE id IN (' . Db::placeholders(count($chunk)) . ')');
+			$stmt->execute(array_merge([$on ? 1 : 0], $chunk));
+			$changed += $stmt->rowCount();
+		}
+		return $changed;
+	}
+
+	/** Shows the file in the system file manager (Explorer with the file selected on Windows). Only for a registered file that is still there. */
+	public static function reveal(int $id): array {
+		$row = self::find($id);
+		if ($row === null) {
+			throw new ApiException('That file is not in the library.', 404);
+		}
+		$real = Paths::resolve($row['path']);
+		if ($real === null || !is_file($real) || !Paths::allowed($real)) {
+			throw new ApiException('The file is not at its saved location any more.', 404);
+		}
+		$nul = Paths::isWindows() ? 'NUL' : '/dev/null';
+		if (Paths::isWindows()) {
+			// Start-Process hands Explorer to Windows and returns at once. Both values are single-quoted for PowerShell.
+			$q = fn($v) => "'" . str_replace("'", "''", $v) . "'";
+			$script = 'Start-Process -FilePath explorer.exe -ArgumentList ' . $q('/select,"' . $real . '"');
+			$cmd = ['powershell', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-Command', $script];
+		} else {
+			$cmd = ['sh', '-c', 'nohup xdg-open ' . escapeshellarg(dirname($real)) . ' >/dev/null 2>&1 &'];
+		}
+		$proc = @proc_open($cmd, [0 => ['file', $nul, 'r'], 1 => ['file', $nul, 'w'], 2 => ['file', $nul, 'w']], $pipes);
+		if (!is_resource($proc)) {
+			throw new ApiException('Could not open the folder.', 500);
+		}
+		proc_close($proc);
+		return ['folder' => dirname($real)];
 	}
 
 	public static function markMissing(int $id): void {

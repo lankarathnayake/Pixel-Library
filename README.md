@@ -26,7 +26,10 @@ browse, search and filter it.
 - **Faceted filtering** in the sidebar: several terms in the same category = OR, across categories = AND.
   Plus *Untagged only* (great for working through a fresh import) and *Missing files only*.
 - **Viewer** with previous/next (buttons or arrow keys), video playback with seeking, per-file tag editing
-  (comma-separated entry, focus stays put for rapid tagging), copy-path button.
+  (comma-separated entry, focus stays put for rapid tagging; adding or removing a tag only redraws the chips), copy-path and
+  *Open folder* (shows the file in Explorer) buttons, and a **heart** to mark favourites (hearted tiles show a heart in the grid;
+  *Favourites only* in the sidebar filters to them). The play / playlist buttons stay pinned at the bottom of the panel;
+  *Remove from library* and *Delete from disk* are tucked behind *More actions*.
 - **Select mode:** as soon as one file is ticked, clicking any other tile ticks / unticks it instead of opening it (shift-click
   = range, double-click still opens the file, Esc clears the selection and leaves the mode).
 - **Bulk actions:** click the tick in a tile's corner (shift-click for a range), then apply or remove a
