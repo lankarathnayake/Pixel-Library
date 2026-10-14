@@ -19,6 +19,7 @@ CREATE TABLE media (
 	height      INTEGER NULL,
 	duration    REAL NULL,                           -- videos only: length in seconds (filled when previews are made)
 	is_missing  INTEGER NOT NULL DEFAULT 0,          -- file no longer found at `path`
+	is_favorite INTEGER NOT NULL DEFAULT 0,          -- the heart in the viewer (1 = favourite)
 	thumb_status      INTEGER NOT NULL DEFAULT 0,    -- videos: 0 pending, 1 done, 2 failed, 3 in progress
 	thumb_claimed_at  TEXT NULL,                     -- when a worker took it (stale claims are retried)
 	content_hash      TEXT NULL,                     -- duplicate finder: hash of size + sampled bytes (NULL = not hashed yet)
@@ -29,6 +30,7 @@ CREATE INDEX idx_media_type ON media (type);
 CREATE INDEX idx_media_name ON media (name);
 CREATE INDEX idx_media_added ON media (added_at);
 CREATE INDEX idx_media_missing ON media (is_missing);
+CREATE INDEX idx_media_favorite ON media (is_favorite);
 CREATE INDEX idx_media_thumb_status ON media (thumb_status);
 CREATE INDEX idx_media_hash ON media (content_hash);
 CREATE INDEX idx_media_size ON media (size);
@@ -151,4 +153,4 @@ INSERT INTO media_format (ext, type, mime) VALUES
 -- Starter categories (add, rename or delete freely in the Manage page).
 INSERT INTO category (name) VALUES ('Tags'), ('Actors');
 
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;

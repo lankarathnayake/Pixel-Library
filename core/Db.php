@@ -19,7 +19,7 @@
 class Db {
 
 	/** Version of db/schema.sqlite.sql (its last line sets PRAGMA user_version to the same number). */
-	public const SCHEMA_VERSION = 6;
+	public const SCHEMA_VERSION = 7;
 
 	private static ?PDO $pdo = null;
 

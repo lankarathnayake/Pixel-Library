@@ -56,6 +56,7 @@ require_once __DIR__ . '/common/bootstrap.php';
 <div class="layout">
 	<aside id="sidebar">
 		<div class="side-block">
+			<label class="check"><input type="checkbox" id="f-fav"> Favourites only</label>
 			<label class="check"><input type="checkbox" id="f-untagged"> Untagged only</label>
 			<label class="check"><input type="checkbox" id="f-missing"> Missing files only</label>
 			<label class="check" title="Videos that have no hover previews yet (pending or failed)"><input type="checkbox" id="f-nothumbs"> Videos without previews</label>

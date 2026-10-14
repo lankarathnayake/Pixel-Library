@@ -9,7 +9,7 @@
 	const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
 
 	const state = {
-		q: '', type: '', sort: 'added_desc', untagged: false, missing: false, nothumbs: false, dmin: '', dmax: '',
+		q: '', type: '', sort: 'added_desc', untagged: false, missing: false, nothumbs: false, favorite: false, dmin: '', dmax: '',
 		terms: new Set(), notTerms: new Set(), facetText: new Map(), // terms a file must have (OR in a category, AND across) / terms a file must not have
 		items: [], els: [], start: 0, total: 0, cols: 1, pitch: 0, gap: 12, winBusy: false, req: 0, // the window: see "grid" below
 		selected: new Map(), lastClicked: -1, // selected: id -> item (kept after its tile leaves the window); lastClicked: list position
@@ -210,6 +210,7 @@
 		if (state.untagged) p.set('untagged', '1');
 		if (state.missing) p.set('missing', '1');
 		if (state.nothumbs) p.set('nothumbs', '1');
+		if (state.favorite) p.set('favorite', '1');
 		if (state.dmin !== '') p.set('dmin', state.dmin);
 		if (state.dmax !== '') p.set('dmax', state.dmax);
 		state.terms.forEach((id) => p.append('terms[]', id));
@@ -219,7 +220,7 @@
 	}
 
 	function filtersActive() {
-		return !!(state.q || state.type || state.untagged || state.missing || state.nothumbs || state.dmin !== '' || state.dmax !== '' || state.terms.size || state.notTerms.size);
+		return !!(state.q || state.type || state.untagged || state.missing || state.nothumbs || state.favorite || state.dmin !== '' || state.dmax !== '' || state.terms.size || state.notTerms.size);
 	}
 
 	/** Fades the grid and shows the "Loading..." pill while a fresh result set is fetched. */
@@ -637,9 +638,10 @@
 		box.append(
 			el('input', { type: 'checkbox', className: 'sel', title: 'Select (shift-click for a range)', onclick: (e) => { e.stopPropagation(); onSelect(indexOf(item), e.shiftKey, e.target.checked); } }),
 			badge,
-			item.is_missing ? el('span', { className: 'badge warn' }, 'Missing') : null);
+			item.is_missing ? el('span', { className: 'badge warn' }, 'Missing') : null,
+			el('span', { className: 'fav-badge', title: 'Favourite' }, '♥'));
 		const tile = el('div', {
-			className: 'tile' + (item.is_missing ? ' missing' : ''), title: item.name,
+			className: 'tile' + (item.is_missing ? ' missing' : '') + (item.is_favorite ? ' fav' : ''), title: item.name,
 			// "select mode": while anything is selected, a click on a tile ticks / unticks it (shift = range) instead of opening it;
 			// double-click still opens it (its two clicks cancel out)
 			onclick: (e) => {
@@ -924,7 +926,7 @@
 				+ (missing.length ? ' Not found: ' + missing.join(', ') + '.' : ''), missing.length > 0);
 			$('bulk-term').value = '';
 			await loadTaxonomy();
-			if (state.untagged || state.terms.size || state.notTerms.size) loadItems(true); // results may have changed
+			if (state.untagged || state.favorite || state.terms.size || state.notTerms.size) loadItems(true); // results may have changed
 		} catch (e) { toast(e.message, true); }
 	}
 
@@ -1015,7 +1017,7 @@
 		document.body.classList.remove('noscroll');
 		const tile = state.els[state.view - state.start];
 		state.view = -1;
-		if (state.dirty && (state.untagged || state.terms.size || state.notTerms.size)) loadItems(true);
+		if (state.dirty && (state.untagged || state.favorite || state.terms.size || state.notTerms.size)) loadItems(true);
 		else if (tile && tile.isConnected) { // the viewer may have moved the window: bring the last-viewed tile back into view
 			const r = tile.getBoundingClientRect();
 			if (r.top < topbarHeight() || r.bottom > window.innerHeight) {
@@ -1140,44 +1142,110 @@
 		}
 		if (!viewItem() || viewItem().id !== id) return; // user already moved on
 
-		const meta = [d.type, d.duration ? formatDuration(d.duration) : null, d.width ? d.width + ' x ' + d.height : null, formatSize(d.size), d.file_mtime ? 'modified ' + d.file_mtime.slice(0, 10) : null, 'added ' + d.added_at.slice(0, 10)]
-			.filter(Boolean).join('  ·  ');
+		const listItem = viewItem();
+		let terms = d.terms;
 
+		// ---- tags: adding / removing one redraws only the chips (the rest of the panel, and what you are typing, stays put) ----
+		const chipBoxes = new Map(); // category id -> its chips element
+		const drawChips = () => {
+			for (const cat of state.categories) {
+				const box = chipBoxes.get(cat.id);
+				if (box) box.replaceChildren(...terms.filter((t) => t.category_id === cat.id).map(chip));
+			}
+		};
 		const refresh = async () => {
 			state.dirty = true;
-			await Promise.all([renderPanel(id), loadTaxonomy()]);
+			const [fresh] = await Promise.all([api(LIB + '?id=' + id), loadTaxonomy()]);
+			terms = fresh.item.terms;
+			if (viewItem() && viewItem().id === id) drawChips();
+		};
+		const chip = (t) => {
+			const info = termById.get(t.id) || {};
+			return el('span', { className: 'chip' + (info.photo ? ' has-face' : '') },
+				el('a', { className: 'chip-link', href: 'actors.php?cat=' + t.category_id + '&open=' + t.id, title: 'Open the profile' },
+					info.photo ? faceEl(t.id, t.name, info.photo, info.full_name, 26) : null, t.name),
+				el('button', {
+					type: 'button', title: 'Remove', onclick: async () => {
+						try { await api(TAX, { action: 'unassign', media_ids: [id], term_ids: [t.id] }); await refresh(); } catch (e) { toast(e.message, true); }
+					},
+				}, '×'));
 		};
 		const sections = state.categories.map((cat) => {
-			const mine = d.terms.filter((t) => t.category_id === cat.id);
-			const add = async (input) => {
-				const names = input.value.split(',').map((s) => s.trim()).filter(Boolean);
+			const add = async (input, text) => { // text: names to add; omitted = take (and clear) what is in the box
+				const names = (text !== undefined ? text : input.value).split(',').map((s) => s.trim()).filter(Boolean);
 				if (!names.length) return;
-				input.value = '';
-				state.focusCat = cat.id;
+				if (text === undefined) input.value = '';
 				try {
 					await api(TAX, { action: 'assign_named', media_ids: [id], terms: { [cat.id]: names } });
 					await refresh();
 				} catch (e) { toast(e.message, true); }
+				const now = document.activeElement; // keep typing in this box (unless the user has deliberately moved on to another field)
+				if (input.isConnected && (now === document.body || now === input)) input.focus();
 			};
+			const chips = el('div', { className: 'chips' });
+			chipBoxes.set(cat.id, chips);
 			return el('div', { className: 'v-cat' },
 				el('h4', {}, cat.name),
-				el('div', { className: 'chips' }, mine.map((t) => { const info = termById.get(t.id) || {}; return el('span', { className: 'chip' + (info.photo ? ' has-face' : '') },
-					el('a', { className: 'chip-link', href: 'actors.php?cat=' + cat.id + '&open=' + t.id, title: 'Open the profile' },
-						info.photo ? faceEl(t.id, t.name, info.photo, info.full_name, 26) : null, t.name),
-					el('button', {
-						type: 'button', title: 'Remove', onclick: async () => {
-							try { await api(TAX, { action: 'unassign', media_ids: [id], term_ids: [t.id] }); await refresh(); } catch (e) { toast(e.message, true); }
-						},
-					}, '×')); })),
+				chips,
 				el('input', {
 					type: 'text', list: 'dl-' + cat.id, placeholder: 'Add ' + cat.name.toLowerCase() + ' (Enter)', dataset: { cat: cat.id }, maxLength: 100,
 					onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); add(e.target); } },
+					oninput: (e) => { // typing (or pasting) a comma submits everything before the last comma; what follows stays in the box
+						const input = e.target;
+						if (e.isComposing || !input.value.includes(',')) return;
+						const cut = input.value.lastIndexOf(',');
+						const done = input.value.slice(0, cut);
+						input.value = input.value.slice(cut + 1).trimStart(); // clears the box (or leaves what was typed after the comma)
+						input.focus();
+						add(input, done);
+					},
 					onchange: (e) => add(e.target),
 				}));
 		});
+		drawChips();
 
-		// videos: make (or redo) this one video's hover previews
-		const listItem = viewItem();
+		// ---- head: name, heart, facts, location ----
+		const heart = el('button', { className: 'v-heart', type: 'button' });
+		const paintHeart = () => {
+			const on = !!listItem.is_favorite;
+			heart.classList.toggle('on', on);
+			heart.textContent = on ? '♥' : '♡';
+			heart.title = on ? 'Favourite - click to remove' : 'Mark as favourite';
+			heart.setAttribute('aria-pressed', on ? 'true' : 'false');
+		};
+		heart.onclick = async () => {
+			const on = !listItem.is_favorite;
+			heart.disabled = true;
+			try {
+				await api(LIB, { action: 'favorite', ids: [id], on });
+				listItem.is_favorite = on;
+				const i = indexOf(listItem);
+				if (i >= 0 && state.els[i]) state.els[i].classList.toggle('fav', on); // the heart on the tile in the grid
+				state.dirty = true; // "Favourites only" results may have changed
+			} catch (e) { toast(e.message, true); }
+			heart.disabled = false;
+			paintHeart();
+		};
+		listItem.is_favorite = d.is_favorite;
+		paintHeart();
+
+		const facts = [d.type === 'video' ? 'Video' : 'Image', d.ext.toUpperCase(), d.duration ? formatDuration(d.duration) : null, d.width ? d.width + ' × ' + d.height : null, formatSize(d.size)].filter(Boolean);
+		const dates = [d.file_mtime ? 'modified ' + d.file_mtime.slice(0, 10) : null, 'added ' + d.added_at.slice(0, 10)].filter(Boolean).join('  ·  ');
+
+		const head = el('div', { className: 'v-head' },
+			el('div', { className: 'v-title' }, el('h3', { className: 'v-name' }, d.name), heart),
+			el('div', { className: 'v-facts' }, facts.map((f) => el('span', { className: 'v-fact' }, f))),
+			el('div', { className: 'muted small' }, dates),
+			el('div', { className: 'v-path' },
+				el('code', { title: d.path }, d.path),
+				el('div', { className: 'v-path-btns' },
+					el('button', { className: 'btn small', type: 'button', onclick: () => copyText(d.path) }, 'Copy'),
+					d.is_missing ? null : el('button', {
+						className: 'btn small', type: 'button', title: 'Show the file in Explorer',
+						onclick: (e) => withLoading(e.currentTarget, async () => { try { await api(LIB, { action: 'reveal', id }); } catch (err) { toast(err.message, true); } }),
+					}, 'Open folder'))));
+
+		// ---- foot (stays at the bottom while the tags scroll): play + playlist, then the risky actions behind "More" ----
 		const hasFrames = !!(listItem && listItem.thumbs && listItem.thumbs.length);
 		const plSelect = el('select', { className: 'v-pl', title: 'Playlist' });
 		fillPlaylistSelect(plSelect);
@@ -1194,24 +1262,27 @@
 				},
 			}, hasFrames ? 'Regenerate previews' : 'Generate previews')
 			: null;
+		const playButtons = d.type === 'video' && !d.is_missing ? players.map((pl) => el('button', {
+			className: 'btn small primary', type: 'button', title: 'Play this video now (nothing is saved to your playlists)',
+			onclick: (e) => playNow([id], pl, e.currentTarget),
+		}, 'Play in ' + pl.name)) : [];
+
+		const foot = el('div', { className: 'v-foot' },
+			playButtons.length ? el('div', { className: 'v-actions' }, ...playButtons) : null,
+			plRow,
+			videoButton ? el('div', { className: 'v-actions' }, videoButton) : null,
+			el('details', { className: 'v-more' },
+				el('summary', {}, 'More actions'),
+				el('div', { className: 'v-actions v-danger' },
+					el('button', { className: 'btn small danger', type: 'button', title: 'Takes it out of the library only - the file stays on your computer', onclick: async (e) => { if (await removeFromLibrary([id], e.currentTarget)) closeViewer(); } }, 'Remove from library'),
+					el('button', { className: 'btn small danger', type: 'button', title: 'PERMANENTLY deletes the file from your computer', onclick: () => deleteFromDisk([listItem]) }, 'Delete from disk'))));
 
 		panel.replaceChildren(
-			el('h3', { className: 'v-name' }, d.name),
-			el('div', { className: 'muted small' }, meta),
-			el('div', { className: 'v-path' },
-				el('code', {}, d.path),
-				el('button', { className: 'btn small', type: 'button', onclick: () => copyText(d.path) }, 'Copy path')),
-			...sections,
-			...(state.categories.length ? [] : [el('p', { className: 'muted small' }, 'Create categories under "Manage tags" to start labelling.')]),
-			plRow,
-			el('div', { className: 'v-actions' },
-				...(d.type === 'video' && !d.is_missing ? players.map((pl) => el('button', {
-					className: 'btn small primary', type: 'button', title: 'Play this video now (nothing is saved to your playlists)',
-					onclick: (e) => playNow([id], pl, e.currentTarget),
-				}, 'Play in ' + pl.name)) : []),
-				videoButton,
-				el('button', { className: 'btn small danger', type: 'button', title: 'Takes it out of the library only - the file stays on your computer', onclick: async (e) => { if (await removeFromLibrary([id], e.currentTarget)) closeViewer(); } }, 'Remove from library'),
-				el('button', { className: 'btn small danger', type: 'button', title: 'PERMANENTLY deletes the file from your computer', onclick: () => deleteFromDisk([listItem]) }, 'Delete from disk')));
+			head,
+			el('div', { className: 'v-body' },
+				...sections,
+				...(state.categories.length ? [] : [el('p', { className: 'muted small' }, 'Create categories under "Manage tags" to start labelling.')])),
+			foot);
 
 		if (state.focusCat !== null) {
 			const box = panel.querySelector('input[data-cat="' + state.focusCat + '"]');
@@ -1574,15 +1645,16 @@
 		$('fo-form').addEventListener('submit', rememberFolder);
 		$('fo-scan-all').addEventListener('click', () => withLoading($('fo-scan-all'), rescanAll));
 		$('bulk-pl-add').addEventListener('click', () => withLoading($('bulk-pl-add'), () => addToPlaylist($('bulk-pl').value, [...state.selected.keys()])));
+		$('f-fav').addEventListener('change', (e) => { state.favorite = e.target.checked; loadItems(true); });
 		$('f-nothumbs').addEventListener('change', (e) => { state.nothumbs = e.target.checked; loadItems(true); });
 		$('btn-last').addEventListener('click', goToLast);
 		$('btn-clear').addEventListener('click', () => {
 			forgetLast();
-			Object.assign(state, { q: '', type: '', untagged: false, missing: false, nothumbs: false, dmin: '', dmax: '' });
+			Object.assign(state, { q: '', type: '', untagged: false, missing: false, nothumbs: false, favorite: false, dmin: '', dmax: '' });
 			$('f-dur').value = ''; $('f-dur-custom').hidden = true; $('f-dmin').value = ''; $('f-dmax').value = '';
 			state.terms.clear();
 			state.notTerms.clear(); state.facetText.clear();
-			$('q').value = ''; $('type').value = ''; $('f-untagged').checked = false; $('f-missing').checked = false; $('f-nothumbs').checked = false;
+			$('q').value = ''; $('type').value = ''; $('f-untagged').checked = false; $('f-missing').checked = false; $('f-nothumbs').checked = false; $('f-fav').checked = false;
 			refreshFacets();
 			loadItems(true);
 		});
